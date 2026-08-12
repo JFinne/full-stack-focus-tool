@@ -80,6 +80,41 @@ is gitignored rather than committed.
 Setup on a new machine: copy `server/.env.example` to `server/.env` and fill in
 `DATABASE_URL` from the [Neon](https://neon.tech) dashboard.
 
+## The timer
+
+```bash
+npm run check:timer
+```
+
+Verifies the state machine against simulated clocks — including a 20-minute
+background-tab scenario — without waiting for real time to pass.
+
+**The one thing to understand: the timer derives elapsed time, it never counts
+it.** The obvious implementation ticks once a second and subtracts, and it is
+wrong in two ways. It drifts, because `setInterval` only promises not to fire
+*early*, and each subtraction builds on the last. Worse, browsers throttle
+timers in hidden tabs — often to once a minute — so switching tabs for twenty
+minutes might produce twenty ticks instead of twelve hundred, and the timer
+would think twenty *seconds* had passed.
+
+Instead, starting the timer records the wall-clock instant it should end
+(`endsAt`), and every render computes `endsAt - Date.now()`. Ticking exists only
+to trigger a re-render. Skip a thousand ticks and the next one is still correct,
+because the answer never depended on the ticks.
+
+Three things fall out of this for free:
+
+- Background tabs are simply not a problem.
+- A page reload resumes exactly where it left off — a saved end instant is still
+  valid minutes later, which a saved countdown would not be.
+- The logic is pure (`now` is a parameter, not a `Date.now()` call), so it's
+  testable without waiting.
+
+Phases do **not** auto-start when one ends. Because time is derived, a timer
+left running while you're away is genuinely finished when you return — and
+auto-starting would force us to invent what happened during the gap. Landing
+stopped means the app never claims you took a break you didn't take.
+
 ## Theming
 
 The current theme lives in three places, each for a different reason:
@@ -186,7 +221,8 @@ domain, so that exact line works there unchanged — dev and prod behave alike.
 - [x] **3b. Auth (client)** — signup/login forms and the signed-in gate
 - [x] **4a. App shell** — routing, persistent sidebar, page scaffolding
 - [x] **4b. Theme switcher** — DaisyUI themes + `UserPreferences` table
-- [ ] 5. Pomodoro timer
+- [x] **5a. Pomodoro timer** — drift-free engine, survives tab switches and reloads
+- [ ] 5b. Timer settings — custom durations + completion notifications
 - [ ] 6. Focus Mode
 - [ ] 7. Notes
 - [ ] 8. Boards

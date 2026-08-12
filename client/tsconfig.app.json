@@ -22,5 +22,16 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+
+  /* *.check.ts files are Node scripts, not browser code. They use APIs like
+     `process` that don't exist in this project's DOM-only type environment, and
+     nothing in the app imports them, so they're excluded from the build.
+
+     The trade-off: they aren't type-checked here, so they could silently rot as
+     the code they verify changes. `npm run check:timer` runs them through tsx,
+     which surfaces broken imports and type errors at runtime — so the safeguard
+     is running them, not compiling them. When we adopt a real test runner this
+     exclusion goes away. */
+  "exclude": ["src/**/*.check.ts"]
 }

@@ -8,6 +8,7 @@ import { NotesPage } from "./pages/NotesPage";
 import { BoardsPage } from "./pages/BoardsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { TimerProvider } from "./timer/TimerProvider";
 
 /**
  * App — the auth gate, and the route table for signed-in users.
@@ -52,7 +53,17 @@ function App() {
   }
 
   return (
-    <Routes>
+    /*
+      TimerProvider wraps the routes, not an individual page.
+
+      That placement is what keeps the timer running as you navigate — state
+      inside TimerPage would be destroyed the moment you left it. It sits inside
+      the auth gate rather than up in main.tsx so that signing out ends the
+      timer along with the session, instead of leaving it running for whoever
+      signs in next.
+    */
+    <TimerProvider>
+      <Routes>
       {/*
         A nested route. AppLayout renders at this level and everything below is
         rendered into its <Outlet />, so the navbar and sidebar stay mounted
@@ -73,7 +84,8 @@ function App() {
             stranding you on a bare page with no way back. */}
         <Route path="*" element={<NotFoundPage />} />
       </Route>
-    </Routes>
+      </Routes>
+    </TimerProvider>
   );
 }
 
