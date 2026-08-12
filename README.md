@@ -80,6 +80,34 @@ is gitignored rather than committed.
 Setup on a new machine: copy `server/.env.example` to `server/.env` and fill in
 `DATABASE_URL` from the [Neon](https://neon.tech) dashboard.
 
+## Authentication
+
+Sessions live in the database, not in server memory — a requirement rather than
+a preference, since Vercel's serverless functions sleep between requests and
+forget anything held in memory.
+
+How a login travels through the system:
+
+1. The form posts to `/api/auth/login`.
+2. The server verifies the password against its argon2id hash.
+3. It generates a random token, stores **SHA-256(token)** in the `sessions`
+   table, and sends the raw token back as an `httpOnly` cookie.
+4. Every later request carries that cookie automatically. `attachUser`
+   middleware hashes it, looks up the session, and sets `req.user`.
+
+Because the cookie is `httpOnly`, client JavaScript cannot read it — so on page
+load the React app can't tell whether it's signed in and has to ask
+`/api/auth/me`. That's the reason for the `"checking"` state in `AuthContext`:
+without it, every refresh would flash the login form at a signed-in user.
+
+Client-side, `AuthProvider` owns the current user and publishes it through
+context. Any component can call `useAuth()`. `App.tsx` is the gate: checking →
+spinner, signed out → `AuthForm`, signed in → `Dashboard`.
+
+**Known gap:** there is no rate limiting on `/api/auth/login` yet. Argon2's
+slowness raises the cost of brute force but is not a substitute. This needs to
+be addressed before deploying.
+
 ## Two things worth understanding
 
 **npm workspaces.** The root `package.json` lists `client` and `server` as
@@ -103,7 +131,7 @@ domain, so that exact line works there unchanged — dev and prod behave alike.
 - [x] **1. Scaffolding** — client, server, and the connection between them
 - [x] **2. Database** — Neon Postgres + Prisma, `users` table, first migration
 - [x] **3a. Auth (server)** — register, login, logout, sessions, `requireAuth`
-- [ ] 3b. Auth (client) — signup/login forms and the signed-in gate
+- [x] **3b. Auth (client)** — signup/login forms and the signed-in gate
 - [ ] 4. App shell — login gate, dashboard layout, theme switcher
 - [ ] 5. Pomodoro timer
 - [ ] 6. Focus Mode
