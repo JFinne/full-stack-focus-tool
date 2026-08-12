@@ -1,0 +1,21 @@
+/**
+ * index.css — global stylesheet, imported once in main.tsx.
+ *
+ * Tailwind v4 is configured here in CSS rather than in a JavaScript config
+ * file. If you find older tutorials telling you to create `tailwind.config.js`
+ * and fill in a `content: [...]` array, they're describing v3. v4 scans your
+ * files automatically and is configured with the directives below.
+ */
+
+/* Brings in Tailwind itself: the CSS reset, the design tokens, and every
+   utility class (`flex`, `p-4`, `text-lg`, ...). */
+@import "tailwindcss";
+
+/* Loads DaisyUI, which layers ready-made component classes (`btn`, `card`,
+   `navbar`, `badge`) on top of Tailwind's low-level utilities, plus the theme
+   system we'll use for the Theme Settings feature later.
+
+   Right now this enables DaisyUI's two default themes: `light`, and `dark`
+   which activates automatically if your OS is set to dark mode. We'll expand
+   this into a proper theme picker in a later chunk. */
+@plugin "daisyui";

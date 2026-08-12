@@ -1,0 +1,28 @@
+# Dependencies (reinstalled from package.json, never committed)
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment variables — these hold secrets like database passwords and API
+# keys. Committing them would publish those secrets to GitHub forever, so this
+# line matters more than any other in this file.
+.env
+.env.*
+!.env.example
+
+# Editor / OS noise
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Vercel
+.vercel

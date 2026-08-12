@@ -1,0 +1,40 @@
+{
+  "compilerOptions": {
+    /* What JavaScript version to output. Node 24 supports everything modern,
+       so we can target a recent standard and keep the output readable. */
+    "target": "ES2023",
+    "lib": ["ES2023"],
+
+    /* "nodenext" tells TypeScript to resolve imports the same way Node itself
+       does at runtime. The practical consequence you'll notice: when importing
+       your own files you must write the extension as ".js" even though the file
+       on disk is ".ts" (see src/index.ts). That looks wrong but is correct —
+       you're naming the file as it will exist *after* compiling. */
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+
+    /* Where compiled JavaScript goes, and where the source lives. */
+    "outDir": "dist",
+    "rootDir": "src",
+
+    /* "strict" turns on all of TypeScript's safety checks. It is stricter than
+       necessary at first and will occasionally annoy you, but nearly every rule
+       it enforces exists because someone shipped a bug without it. */
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+
+    /* Don't type-check inside node_modules — it's slow and not our problem. */
+    "skipLibCheck": true,
+
+    /* Lets us `import express from "express"` cleanly regardless of how that
+       package was originally authored. */
+    "esModuleInterop": true,
+
+    /* Generates .map files so error stack traces point at your TypeScript
+       source lines instead of the compiled output. */
+    "sourceMap": true
+  },
+  "include": ["src"]
+}
