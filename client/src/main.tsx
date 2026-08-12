@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App.tsx";
 import { AuthProvider } from "./auth/AuthProvider.tsx";
@@ -7,20 +8,31 @@ import { AuthProvider } from "./auth/AuthProvider.tsx";
 /**
  * main.tsx — where React attaches to the page.
  *
- * AuthProvider wraps App, which is what makes useAuth() work anywhere inside.
- * A provider only serves components *below* it in the tree, so this has to sit
- * above everything that needs auth — which, here, is everything.
+ * The nesting order matters:
  *
- * StrictMode is a development-only wrapper that deliberately runs effects
- * twice (mount, unmount, mount again) to surface bugs in cleanup logic. If you
- * see a request fire twice in the network tab during development, that's this,
- * and it's why our effects use the `active` flag pattern. It does not happen in
- * production builds.
+ *   BrowserRouter   makes the URL available to everything inside
+ *     AuthProvider  makes the current user available to everything inside
+ *       App         reads both
+ *
+ * BrowserRouter goes outermost because it's the more fundamental context — and
+ * because AuthProvider may eventually want to navigate (redirecting after a
+ * session expires, say), which requires being inside the router.
+ *
+ * BrowserRouter uses the browser's real History API, so URLs look like
+ * /settings rather than /#/settings. That's nicer, but it does mean the server
+ * has to answer every path with index.html — otherwise refreshing on /settings
+ * asks the server for a file that doesn't exist. Vite's dev server handles this
+ * automatically; on Vercel it needs a rewrite rule, which we'll add at deploy.
+ *
+ * StrictMode is development-only and deliberately runs effects twice to surface
+ * cleanup bugs. If you see a request fire twice in the network tab, that's this.
  */
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </BrowserRouter>
   </StrictMode>,
 );

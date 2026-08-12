@@ -80,6 +80,26 @@ is gitignored rather than committed.
 Setup on a new machine: copy `server/.env.example` to `server/.env` and fill in
 `DATABASE_URL` from the [Neon](https://neon.tech) dashboard.
 
+## Routing
+
+React Router, wired declaratively in `App.tsx`. `AppLayout` is a parent route
+holding the navbar and sidebar; each page renders into its `<Outlet />`, so the
+chrome stays mounted while the inner page changes.
+
+Auth gates the whole route table rather than each route individually — signed
+out, the routes simply don't exist. That means there's no per-route guard to
+forget. It also preserves the URL, so someone who opens `/boards` and has to
+sign in first lands on `/boards` afterwards.
+
+To be clear about what that gate is: it decides what to *render*, and that is
+all. It is not security — anyone can edit JavaScript in their own browser. The
+real protection is `requireAuth` on the server, which refuses to hand over data.
+
+**Deploy note:** `BrowserRouter` uses real URLs like `/settings`, so the server
+must return `index.html` for any unmatched path — otherwise refreshing on a
+subroute 404s. Vite's dev server does this automatically; Vercel needs a rewrite
+rule in `vercel.json`, which we'll add at deploy time.
+
 ## Authentication
 
 Sessions live in the database, not in server memory — a requirement rather than
@@ -132,7 +152,8 @@ domain, so that exact line works there unchanged — dev and prod behave alike.
 - [x] **2. Database** — Neon Postgres + Prisma, `users` table, first migration
 - [x] **3a. Auth (server)** — register, login, logout, sessions, `requireAuth`
 - [x] **3b. Auth (client)** — signup/login forms and the signed-in gate
-- [ ] 4. App shell — login gate, dashboard layout, theme switcher
+- [x] **4a. App shell** — routing, persistent sidebar, page scaffolding
+- [ ] 4b. Theme switcher — DaisyUI themes + `UserPreferences` table
 - [ ] 5. Pomodoro timer
 - [ ] 6. Focus Mode
 - [ ] 7. Notes
