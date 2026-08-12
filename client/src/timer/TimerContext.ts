@@ -27,6 +27,15 @@ export type TimerContextValue = {
   /** Completed work sessions in the current cycle. */
   completedWorkSessions: number;
 
+  /**
+   * How many focus sessions make a cycle, from the user's settings.
+   *
+   * Exposed here rather than read from preferences by the page, so the timer UI
+   * has one source for everything it displays — and can't accidentally render a
+   * cycle length that disagrees with the one the timer is actually using.
+   */
+  sessionsBeforeLongBreak: number;
+
   /** True for the moment a phase has ended and is awaiting the next step. */
   justCompleted: boolean;
 

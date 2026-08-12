@@ -142,6 +142,12 @@ Adding a theme means updating **three** places: the `themes:` list in
 actually validates). The server's copy is the one that matters — a client can be
 modified by its user, so the server never trusts what it's told.
 
+`PreferencesProvider` is the **single owner** of everything in
+`user_preferences`. `ThemeProvider` and `TimerProvider` both read from it rather
+than fetching for themselves — two components fetching one endpoint means two
+copies of the same state that can silently disagree. When two parts of an app
+need the same server data, the answer is a shared owner, not a second fetch.
+
 Preference rows are created **lazily**, on first save rather than at
 registration. So nothing is written for users who never change a setting, and
 adding a new preference later needs no backfill — `GET` returns defaults when
@@ -222,7 +228,8 @@ domain, so that exact line works there unchanged — dev and prod behave alike.
 - [x] **4a. App shell** — routing, persistent sidebar, page scaffolding
 - [x] **4b. Theme switcher** — DaisyUI themes + `UserPreferences` table
 - [x] **5a. Pomodoro timer** — drift-free engine, survives tab switches and reloads
-- [ ] 5b. Timer settings — custom durations + completion notifications
+- [x] **5b. Timer settings** — custom durations, tab-title countdown
+- [ ] 5c. Completion alerts — sound and browser notifications
 - [ ] 6. Focus Mode
 - [ ] 7. Notes
 - [ ] 8. Boards

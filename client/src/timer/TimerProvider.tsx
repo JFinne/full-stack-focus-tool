@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePreferences } from "../preferences/PreferencesContext";
 import { TimerContext, type TimerContextValue } from "./TimerContext";
 import {
-  DURATIONS_MS,
+  PHASES,
   advancePhase,
   createInitialState,
   getRemainingMs,
   pause as pauseState,
+  phaseDurationMs,
   reset as resetState,
   start as startState,
+  type TimerConfig,
   type TimerState,
 } from "./timerLogic";
 
@@ -44,10 +47,10 @@ const TICK_INTERVAL_MS = 250;
  * correct when reloaded. A subtract-based timer couldn't do this at all — it
  * would have no idea how much time passed while the page was closed.
  */
-function loadPersistedState(): TimerState {
+function loadPersistedState(config: TimerConfig): TimerState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return createInitialState();
+    if (!raw) return createInitialState(config);
 
     const parsed = JSON.parse(raw) as TimerState;
 
@@ -57,21 +60,48 @@ function loadPersistedState(): TimerState {
     if (
       typeof parsed !== "object" ||
       parsed === null ||
-      !(parsed.phase in DURATIONS_MS) ||
+      !PHASES.includes(parsed.phase) ||
       typeof parsed.remainingMs !== "number"
     ) {
-      return createInitialState();
+      return createInitialState(config);
     }
 
     return parsed;
   } catch {
     // Unavailable or unparseable — start fresh rather than break the page.
-    return createInitialState();
+    return createInitialState(config);
   }
 }
 
 export function TimerProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<TimerState>(loadPersistedState);
+  const { preferences, loaded } = usePreferences();
+
+  /**
+   * The timer's settings, pulled out of preferences.
+   *
+   * useMemo so this object is only rebuilt when one of the four numbers
+   * actually changes. Without it, every preferences render would produce a new
+   * config object, and the effects below that depend on it would re-run
+   * constantly — including the one that resets an idle timer's duration.
+   */
+  const config = useMemo<TimerConfig>(
+    () => ({
+      workMinutes: preferences.workMinutes,
+      shortBreakMinutes: preferences.shortBreakMinutes,
+      longBreakMinutes: preferences.longBreakMinutes,
+      sessionsBeforeLongBreak: preferences.sessionsBeforeLongBreak,
+    }),
+    [
+      preferences.workMinutes,
+      preferences.shortBreakMinutes,
+      preferences.longBreakMinutes,
+      preferences.sessionsBeforeLongBreak,
+    ],
+  );
+
+  const [state, setState] = useState<TimerState>(() =>
+    loadPersistedState(config),
+  );
 
   /**
    * A counter whose only purpose is to force a re-render.
@@ -148,10 +178,43 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
    */
   useEffect(() => {
     if (state.status === "running" && remainingMs <= 0) {
-      setState((current) => advancePhase(current));
+      setState((current) => advancePhase(current, config));
       setJustCompleted(true);
     }
-  }, [state.status, remainingMs]);
+  }, [state.status, remainingMs, config]);
+
+  /**
+   * Adopt new durations when the settings change — but only while idle.
+   *
+   * This is the question configurable durations force: what should happen to a
+   * timer that's already running when you change its length?
+   *
+   * Rewriting a running phase would be hostile. You're eighteen minutes into a
+   * focus session, you bump the setting from 25 to 30, and the timer either
+   * jumps forward or backward under you. Neither is what you meant.
+   *
+   * So the rule is: a phase that hasn't started yet picks up the new duration
+   * immediately; a phase that's running or paused finishes on its original
+   * terms, and the change takes effect from the next phase.
+   *
+   * This also covers first load. The timer is constructed with default
+   * durations because preferences haven't arrived yet; when they do, an
+   * untouched timer quietly adopts them.
+   */
+  useEffect(() => {
+    if (!loaded) return;
+
+    setState((current) => {
+      if (current.status !== "idle") return current;
+
+      const correctDuration = phaseDurationMs(config, current.phase);
+      // Returning the same object when nothing changed matters: React bails out
+      // of the re-render, so this effect can't loop.
+      if (current.remainingMs === correctDuration) return current;
+
+      return { ...current, remainingMs: correctDuration };
+    });
+  }, [config, loaded]);
 
   /** Persist on every change, so a reload can pick up where we left off. */
   useEffect(() => {
@@ -174,28 +237,29 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
 
   const reset = useCallback(() => {
     setJustCompleted(false);
-    setState((current) => resetState(current));
-  }, []);
+    setState((current) => resetState(current, config));
+  }, [config]);
 
   const skip = useCallback(() => {
     setJustCompleted(false);
-    setState((current) => advancePhase(current));
-  }, []);
+    setState((current) => advancePhase(current, config));
+  }, [config]);
 
   const value = useMemo<TimerContextValue>(
     () => ({
       phase: state.phase,
       status: state.status,
       remainingMs,
-      totalMs: DURATIONS_MS[state.phase],
+      totalMs: phaseDurationMs(config, state.phase),
       completedWorkSessions: state.completedWorkSessions,
+      sessionsBeforeLongBreak: config.sessionsBeforeLongBreak,
       justCompleted,
       start,
       pause,
       reset,
       skip,
     }),
-    [state, remainingMs, justCompleted, start, pause, reset, skip],
+    [state, remainingMs, justCompleted, config, start, pause, reset, skip],
   );
 
   return (

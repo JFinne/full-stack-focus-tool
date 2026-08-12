@@ -1,9 +1,5 @@
 import { useTimer } from "../timer/TimerContext";
-import {
-  PHASE_LABELS,
-  SESSIONS_BEFORE_LONG_BREAK,
-  formatDuration,
-} from "../timer/timerLogic";
+import { PHASE_LABELS, formatDuration } from "../timer/timerLogic";
 
 /**
  * TimerPage — the Pomodoro timer.
@@ -20,6 +16,7 @@ export function TimerPage() {
     remainingMs,
     totalMs,
     completedWorkSessions,
+    sessionsBeforeLongBreak,
     justCompleted,
     start,
     pause,
@@ -127,7 +124,7 @@ export function TimerPage() {
         <div className="card-body">
           <h2 className="card-title text-base">This cycle</h2>
           <p className="text-sm text-base-content/70">
-            A long break comes after {SESSIONS_BEFORE_LONG_BREAK} focus
+            A long break comes after {sessionsBeforeLongBreak} focus
             sessions.
           </p>
 
@@ -138,13 +135,13 @@ export function TimerPage() {
               trap that `new Array(4).map(...)` silently does nothing (the slots
               are empty rather than undefined, so map skips them).
             */}
-            {Array.from({ length: SESSIONS_BEFORE_LONG_BREAK }).map((_, i) => (
+            {Array.from({ length: sessionsBeforeLongBreak }).map((_, i) => (
               <span
                 key={i}
                 className={`h-3 flex-1 rounded-full ${
-                  i < completedWorkSessions % SESSIONS_BEFORE_LONG_BREAK ||
+                  i < completedWorkSessions % sessionsBeforeLongBreak ||
                   (completedWorkSessions > 0 &&
-                    completedWorkSessions % SESSIONS_BEFORE_LONG_BREAK === 0 &&
+                    completedWorkSessions % sessionsBeforeLongBreak === 0 &&
                     phase === "longBreak")
                     ? "bg-primary"
                     : "bg-base-300"
@@ -163,7 +160,7 @@ export function TimerPage() {
       </section>
 
       <p className="text-xs text-base-content/50 text-center">
-        Durations are fixed at 25/5/15 for now — chunk 5b makes them yours.
+        Change these durations in Settings.
       </p>
     </div>
   );

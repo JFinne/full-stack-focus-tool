@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
+import { usePreferences } from "../preferences/PreferencesContext";
 import { THEMES, useTheme, type Theme } from "../theme/ThemeContext";
 
 /**
@@ -68,6 +70,9 @@ export function SettingsPage() {
         </div>
       </section>
 
+      {/* ---- Timer ---- */}
+      <TimerSettings />
+
       {/* ---- Account ---- */}
       <section className="card bg-base-100 shadow">
         <div className="card-body">
@@ -87,6 +92,183 @@ export function SettingsPage() {
           </p>
         </div>
       </section>
+    </div>
+  );
+}
+
+/**
+ * TimerSettings — the four Pomodoro numbers.
+ *
+ * These are saved when you finish editing rather than on every keystroke. See
+ * NumberSetting below for why.
+ */
+function TimerSettings() {
+  const { preferences, updatePreferences, fieldErrors } = usePreferences();
+
+  return (
+    <section className="card bg-base-100 shadow">
+      <div className="card-body">
+        <h2 className="card-title text-base">Timer</h2>
+        <p className="text-sm text-base-content/70">
+          A change applies to the next phase — a session that's already running
+          finishes at its original length.
+        </p>
+
+        <div className="grid gap-3 sm:grid-cols-2 mt-3">
+          <NumberSetting
+            id="workMinutes"
+            label="Focus length"
+            unit="minutes"
+            value={preferences.workMinutes}
+            min={1}
+            max={180}
+            error={fieldErrors.workMinutes}
+            onCommit={(v) => updatePreferences({ workMinutes: v })}
+          />
+          <NumberSetting
+            id="shortBreakMinutes"
+            label="Short break"
+            unit="minutes"
+            value={preferences.shortBreakMinutes}
+            min={1}
+            max={60}
+            error={fieldErrors.shortBreakMinutes}
+            onCommit={(v) => updatePreferences({ shortBreakMinutes: v })}
+          />
+          <NumberSetting
+            id="longBreakMinutes"
+            label="Long break"
+            unit="minutes"
+            value={preferences.longBreakMinutes}
+            min={1}
+            max={60}
+            error={fieldErrors.longBreakMinutes}
+            onCommit={(v) => updatePreferences({ longBreakMinutes: v })}
+          />
+          <NumberSetting
+            id="sessionsBeforeLongBreak"
+            label="Sessions before long break"
+            unit="sessions"
+            value={preferences.sessionsBeforeLongBreak}
+            min={1}
+            max={12}
+            error={fieldErrors.sessionsBeforeLongBreak}
+            onCommit={(v) => updatePreferences({ sessionsBeforeLongBreak: v })}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * A number input that saves when you're done editing, not as you type.
+ *
+ * ## Why this needs its own local state
+ *
+ * The obvious approach — `value={preferences.workMinutes}` with an onChange
+ * that saves — breaks the moment someone clears the box to retype. An empty
+ * input parses to NaN, or momentarily to a value like `2` while typing `25`,
+ * and every intermediate keystroke fires a save. You'd get a request per
+ * character, with `2` briefly stored as the real setting.
+ *
+ * So the input keeps its own draft state as a *string* — exactly what the user
+ * typed, including an empty box mid-edit — and only converts to a number and
+ * saves when editing finishes: on blur, or on Enter.
+ *
+ * This distinction between "what's being typed" and "what's saved" shows up
+ * constantly in forms. The input needs to allow states the saved value can't
+ * have.
+ */
+function NumberSetting({
+  id,
+  label,
+  unit,
+  value,
+  min,
+  max,
+  error,
+  onCommit,
+}: {
+  id: string;
+  label: string;
+  unit: string;
+  value: number;
+  min: number;
+  max: number;
+  error?: string;
+  onCommit: (value: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(value));
+
+  /**
+   * Follow the saved value when it changes from outside — the initial load, or
+   * the server correcting us.
+   *
+   * Comparing numbers rather than strings is deliberate: "25" and "25.0" parse
+   * the same, and this shouldn't fight the user over formatting while they're
+   * mid-edit.
+   */
+  useEffect(() => {
+    if (Number(draft) !== value) {
+      setDraft(String(value));
+    }
+    // Intentionally only when the saved value changes. Including `draft` would
+    // reset the box on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  function commit() {
+    const parsed = Number(draft);
+
+    // Reject anything that isn't a usable number and snap back to the saved
+    // value. The server validates too — this just avoids a pointless round trip
+    // and gives immediate feedback.
+    if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+      setDraft(String(value));
+      return;
+    }
+
+    if (parsed !== value) onCommit(parsed);
+  }
+
+  return (
+    <div className="form-control">
+      <label className="label" htmlFor={id}>
+        <span className="label-text">{label}</span>
+      </label>
+
+      <label className="input input-bordered flex items-center gap-2">
+        <input
+          id={id}
+          type="number"
+          className="grow w-full"
+          value={draft}
+          min={min}
+          max={max}
+          step={1}
+          onChange={(e) => setDraft(e.target.value)}
+          // Editing is "finished" when focus leaves...
+          onBlur={commit}
+          // ...or when Enter is pressed, which is what people expect in a form.
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.currentTarget.blur();
+            }
+          }}
+          aria-invalid={Boolean(error)}
+          aria-describedby={`${id}-hint`}
+        />
+        <span className="text-xs text-base-content/50 shrink-0">{unit}</span>
+      </label>
+
+      <span
+        id={`${id}-hint`}
+        className={`label-text-alt mt-1 block ${error ? "text-error" : "text-base-content/50"}`}
+      >
+        {error ?? `${min}–${max}`}
+      </span>
     </div>
   );
 }

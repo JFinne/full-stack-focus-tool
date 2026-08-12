@@ -87,20 +87,47 @@ export type TimerState = {
 };
 
 /**
- * Phase durations.
+ * The user's timer settings, in minutes.
  *
- * Hard-coded for now; chunk 5b moves these into UserPreferences so you can set
- * your own. The classic Pomodoro numbers are 25/5/15 with a long break every
- * four sessions.
+ * These used to be module-level constants. Now that they're configurable they
+ * are *passed in* to every function that needs them, rather than read from
+ * module scope.
+ *
+ * That change is what keeps this file pure. A function reading a mutable module
+ * variable produces different results at different times for the same
+ * arguments, which makes it untestable in exactly the way `Date.now()` did — so
+ * durations get the same treatment as the clock: they're an input, not
+ * something the function reaches out for.
  */
-export const DURATIONS_MS: Record<Phase, number> = {
-  work: 25 * 60 * 1000,
-  shortBreak: 5 * 60 * 1000,
-  longBreak: 15 * 60 * 1000,
+export type TimerConfig = {
+  workMinutes: number;
+  shortBreakMinutes: number;
+  longBreakMinutes: number;
+  sessionsBeforeLongBreak: number;
 };
 
-/** How many work sessions before a long break. */
-export const SESSIONS_BEFORE_LONG_BREAK = 4;
+/** The classic Pomodoro numbers, used until the user's settings arrive. */
+export const DEFAULT_TIMER_CONFIG: TimerConfig = {
+  workMinutes: 25,
+  shortBreakMinutes: 5,
+  longBreakMinutes: 15,
+  sessionsBeforeLongBreak: 4,
+};
+
+/** How long a phase lasts, in milliseconds. */
+export function phaseDurationMs(config: TimerConfig, phase: Phase): number {
+  const minutes =
+    phase === "work"
+      ? config.workMinutes
+      : phase === "shortBreak"
+        ? config.shortBreakMinutes
+        : config.longBreakMinutes;
+
+  return minutes * 60 * 1000;
+}
+
+/** The three phase names, for validating restored state. */
+export const PHASES: readonly Phase[] = ["work", "shortBreak", "longBreak"];
 
 /** Human labels, kept next to the logic they describe. */
 export const PHASE_LABELS: Record<Phase, string> = {
@@ -110,12 +137,12 @@ export const PHASE_LABELS: Record<Phase, string> = {
 };
 
 /** A fresh timer, ready to start a work session. */
-export function createInitialState(): TimerState {
+export function createInitialState(config: TimerConfig): TimerState {
   return {
     phase: "work",
     status: "idle",
     endsAt: null,
-    remainingMs: DURATIONS_MS.work,
+    remainingMs: phaseDurationMs(config, "work"),
     completedWorkSessions: 0,
   };
 }
@@ -167,12 +194,12 @@ export function pause(state: TimerState, now: number): TimerState {
 }
 
 /** Return the current phase to its full duration, stopped. */
-export function reset(state: TimerState): TimerState {
+export function reset(state: TimerState, config: TimerConfig): TimerState {
   return {
     ...state,
     status: "idle",
     endsAt: null,
-    remainingMs: DURATIONS_MS[state.phase],
+    remainingMs: phaseDurationMs(config, state.phase),
   };
 }
 
@@ -182,11 +209,11 @@ export function reset(state: TimerState): TimerState {
  * After work: a long break if we've hit the threshold, otherwise a short one.
  * After any break: back to work.
  */
-export function getNextPhase(state: TimerState): Phase {
+export function getNextPhase(state: TimerState, config: TimerConfig): Phase {
   if (state.phase !== "work") return "work";
 
   const completed = state.completedWorkSessions + 1;
-  return completed % SESSIONS_BEFORE_LONG_BREAK === 0
+  return completed % config.sessionsBeforeLongBreak === 0
     ? "longBreak"
     : "shortBreak";
 }
@@ -216,8 +243,11 @@ export function getNextPhase(state: TimerState): Phase {
  * `completedWorkSessions` only increments after actual work, so skipping a
  * break doesn't inflate your count.
  */
-export function advancePhase(state: TimerState): TimerState {
-  const nextPhase = getNextPhase(state);
+export function advancePhase(
+  state: TimerState,
+  config: TimerConfig,
+): TimerState {
+  const nextPhase = getNextPhase(state, config);
 
   const completedWorkSessions =
     state.phase === "work"
@@ -228,7 +258,7 @@ export function advancePhase(state: TimerState): TimerState {
     phase: nextPhase,
     status: "idle",
     endsAt: null,
-    remainingMs: DURATIONS_MS[nextPhase],
+    remainingMs: phaseDurationMs(config, nextPhase),
     // A finished long break closes the cycle, so the count starts over.
     completedWorkSessions:
       state.phase === "longBreak" ? 0 : completedWorkSessions,

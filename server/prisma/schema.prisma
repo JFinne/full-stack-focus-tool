@@ -119,6 +119,24 @@ model UserPreferences {
   /// available themes actually lives.
   theme String @default("system")
 
+  /// Pomodoro phase lengths, in minutes.
+  ///
+  /// Stored as Int rather than milliseconds because minutes are what the user
+  /// thinks in and types into a form. Converting to milliseconds is the
+  /// timer's job, and doing it at the edge keeps the stored value readable —
+  /// when you look at this table, `25` is obviously twenty-five minutes in a
+  /// way that `1500000` is not.
+  ///
+  /// The defaults are the classic Pomodoro numbers. Because these have
+  /// database-level defaults, adding them to an existing table needed no
+  /// backfill: rows written before this migration simply get 25/5/15/4.
+  workMinutes             Int @default(25)
+  shortBreakMinutes       Int @default(5)
+  longBreakMinutes        Int @default(15)
+
+  /// How many focus sessions before a long break.
+  sessionsBeforeLongBreak Int @default(4)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

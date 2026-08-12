@@ -40,19 +40,47 @@ export const AVAILABLE_THEMES = [
 ] as const;
 
 /**
+ * Bounds on the timer durations.
+ *
+ * These are not arbitrary fussiness. Anyone can call this endpoint directly, so
+ * without limits the stored value could be 0 (a phase that ends instantly and
+ * loops forever), negative, a fraction, or 10 million (a timer that never
+ * finishes). `.int()` matters as much as the range — a duration of 25.7 minutes
+ * would sail through a plain number check and produce odd rounding downstream.
+ *
+ * The upper bounds are generous rather than opinionated. Someone who wants a
+ * three-hour deep-work block should be allowed one; the limit exists to catch
+ * nonsense, not to enforce my idea of a good study habit.
+ */
+const minutesField = (max: number, label: string) =>
+  z
+    .number()
+    .int(`${label} must be a whole number of minutes`)
+    .min(1, `${label} must be at least 1 minute`)
+    .max(max, `${label} must be at most ${max} minutes`);
+
+/**
  * PATCH, not PUT, and the distinction is meaningful.
  *
  * PUT means "replace this whole resource with what I'm sending" — omit a field
  * and you're saying to clear it. PATCH means "change the fields I mention and
  * leave the rest alone."
  *
- * Every field is therefore optional. As preferences grow, a client that only
- * wants to change the theme shouldn't have to send the Pomodoro settings back
- * untouched — and if it did, two browser tabs saving different settings would
- * overwrite each other's changes.
+ * Every field is therefore optional. A client that only wants to change the
+ * theme shouldn't have to send the timer settings back untouched — and if it
+ * did, two browser tabs saving different settings would overwrite each other.
  */
 const updateSchema = z.object({
   theme: z.enum(AVAILABLE_THEMES).optional(),
+  workMinutes: minutesField(180, "Focus length").optional(),
+  shortBreakMinutes: minutesField(60, "Short break").optional(),
+  longBreakMinutes: minutesField(60, "Long break").optional(),
+  sessionsBeforeLongBreak: z
+    .number()
+    .int("Sessions before a long break must be a whole number")
+    .min(1, "There must be at least 1 session before a long break")
+    .max(12, "There can be at most 12 sessions before a long break")
+    .optional(),
 });
 
 /**
@@ -69,13 +97,30 @@ const updateSchema = z.object({
  */
 const DEFAULT_PREFERENCES = {
   theme: "system",
+  workMinutes: 25,
+  shortBreakMinutes: 5,
+  longBreakMinutes: 15,
+  sessionsBeforeLongBreak: 4,
 };
+
+/**
+ * The columns we return. Declared once so GET and PATCH can't drift apart —
+ * a mismatch there would mean saving a setting and getting a different shape
+ * back than the one you'd read a moment earlier.
+ */
+const PREFERENCE_FIELDS = {
+  theme: true,
+  workMinutes: true,
+  shortBreakMinutes: true,
+  longBreakMinutes: true,
+  sessionsBeforeLongBreak: true,
+} as const;
 
 preferencesRouter.get("/", requireAuth, async (req, res) => {
   try {
     const prefs = await prisma.userPreferences.findUnique({
       where: { userId: req.user!.id },
-      select: { theme: true },
+      select: PREFERENCE_FIELDS,
     });
 
     // No row is normal, not an error.
@@ -90,12 +135,19 @@ preferencesRouter.patch("/", requireAuth, async (req, res) => {
   const parsed = updateSchema.safeParse(req.body);
 
   if (!parsed.success) {
-    res.status(400).json({
-      error: "Invalid input",
-      // z.enum produces a message listing the valid options, which is exactly
-      // what a client sending a bad theme needs to see.
-      fields: { theme: parsed.error.issues[0]?.message ?? "Invalid value" },
-    });
+    // Map each complaint back to the field it's about. An earlier version of
+    // this handler hardcoded "theme" as the key, which meant an invalid
+    // workMinutes would show its error under the theme setting — the message
+    // was right and pointed at the wrong input.
+    const fields: Record<string, string> = {};
+    for (const issue of parsed.error.issues) {
+      const field = issue.path[0];
+      if (typeof field === "string" && !fields[field]) {
+        fields[field] = issue.message;
+      }
+    }
+
+    res.status(400).json({ error: "Invalid input", fields });
     return;
   }
 
@@ -124,7 +176,7 @@ preferencesRouter.patch("/", requireAuth, async (req, res) => {
         ...DEFAULT_PREFERENCES,
         ...parsed.data,
       },
-      select: { theme: true },
+      select: PREFERENCE_FIELDS,
     });
 
     res.json({ preferences: prefs });

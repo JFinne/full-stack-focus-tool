@@ -1,167 +1,88 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../lib/api";
-import { useAuth } from "../auth/AuthContext";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePreferences } from "../preferences/PreferencesContext";
 import {
   ThemeContext,
   THEME_STORAGE_KEY,
   applyTheme,
   readStoredTheme,
-  type SaveState,
   type Theme,
   type ThemeContextValue,
 } from "./ThemeContext";
 
 /**
- * ThemeProvider — keeps the theme in three places agreeing with each other.
+ * ThemeProvider — owns the *presentation* of the theme.
  *
- * There are three copies of "the current theme", and understanding why is the
- * heart of this file:
+ * It no longer talks to the server. PreferencesProvider does that, and this
+ * reads from it. What's left here is everything specific to themes being
+ * visual rather than just data:
  *
- *   1. The <html data-theme> attribute — what you actually see.
- *   2. localStorage — a cache, so the next page load is instant (applied by the
- *      inline script in index.html before React exists).
- *   3. The server — the real source of truth, so the setting follows you to
- *      other devices.
+ *   - setting `data-theme` on <html>, which lives above React's root
+ *   - keeping the localStorage cache the pre-paint script in index.html reads
  *
- * The rules that keep them consistent:
- *
- *   - On load, trust the cache. It's already applied; anything else means a
- *     flash.
- *   - Once signed in, ask the server. If it disagrees, the server wins — it
- *     knows about the change you made on your phone; localStorage doesn't.
- *   - On change, update all three, applying locally first so the UI is instant
- *     and never waits for the network.
+ * The three copies of the theme and the rules between them are unchanged: the
+ * cache wins on load (so there's no flash), the server wins once loaded (so the
+ * setting follows you between devices), and a change applies locally first.
  */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { preferences, loaded, updatePreferences, saveState } =
+    usePreferences();
 
   /**
-   * Initialised from localStorage via a function.
+   * The theme currently applied to the page.
    *
-   * Passing a function to useState makes it *lazy* — it runs only on the first
-   * render. Writing `useState(readStoredTheme())` instead would call
-   * localStorage on every single render and throw the result away, which is
-   * wasteful and a genuinely common mistake.
+   * Seeded from localStorage, lazily — passing the function means it runs once,
+   * on first render, rather than on every render.
+   *
+   * Why keep local state at all when preferences already hold a theme? Because
+   * they answer different questions. `preferences.theme` is what the *server*
+   * has (defaulting to "system" before it replies). This is what's *on screen*,
+   * which before the server replies is whatever the pre-paint script applied.
+   * Rendering straight from preferences would flash the default theme for the
+   * few hundred milliseconds the request takes — the exact problem the inline
+   * script exists to prevent.
    */
   const [theme, setThemeState] = useState<Theme>(readStoredTheme);
 
-  /** Whether the last save reached the server. See SaveState in ThemeContext. */
-  const [saveState, setSaveState] = useState<SaveState>("idle");
-
   /**
-   * Tracks which user we've already synced from, so we sync once per sign-in
-   * rather than on every render where `user` happens to be defined.
+   * Adopt the server's theme once it has actually arrived.
    *
-   * A ref rather than state because changing it must NOT trigger a re-render —
-   * it's bookkeeping about what already happened, not something the UI shows.
-   * That distinction is the main reason useRef exists.
-   */
-  const syncedForUser = useRef<string | null>(null);
-
-  /**
-   * When someone signs in, adopt the theme stored on their account.
-   *
-   * This is what makes the setting follow you between devices, and what
-   * corrects the cache when it's stale.
+   * `loaded` is what makes this safe. Without that check, the default "system"
+   * would be applied on first render and stomp on the cached theme the inline
+   * script already put in place.
    */
   useEffect(() => {
-    if (!user) {
-      // Signed out. Reset the marker so signing back in re-syncs. The theme
-      // itself stays as-is — a signed-out visitor should still see the theme
-      // they picked, not get snapped back to default.
-      syncedForUser.current = null;
-      return;
+    if (!loaded) return;
+    if (preferences.theme === theme) return;
+
+    applyTheme(preferences.theme);
+    setThemeState(preferences.theme);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, preferences.theme);
+    } catch {
+      // Storage unavailable — the theme still applies for this session.
     }
-
-    if (syncedForUser.current === user.id) return;
-    syncedForUser.current = user.id;
-
-    let active = true;
-
-    async function syncFromServer() {
-      try {
-        const data = await api.get<{ preferences: { theme: Theme } }>(
-          "/api/preferences",
-        );
-        if (!active) return;
-
-        const serverTheme = data.preferences.theme;
-
-        // Only touch anything if the server actually disagrees. Skipping the
-        // no-op is what keeps the common case (they match) completely free.
-        if (serverTheme !== theme) {
-          applyTheme(serverTheme);
-          setThemeState(serverTheme);
-          try {
-            localStorage.setItem(THEME_STORAGE_KEY, serverTheme);
-          } catch {
-            // Storage unavailable — the theme still works this session.
-          }
-        }
-      } catch (error) {
-        // A failed sync is not worth bothering the user about: they still have
-        // a working theme from the cache. Log it and move on.
-        console.error("[theme] Could not load saved theme:", error);
-      }
-    }
-
-    void syncFromServer();
-
-    return () => {
-      active = false;
-    };
-    // `theme` is deliberately not a dependency. Including it would re-run this
-    // whenever the theme changed — including changes this effect itself made,
-    // and changes the user made by hand, immediately overwriting them with the
-    // server's value. We only want this to run when the *user* changes.
+    // `theme` is intentionally omitted. Including it would re-run this effect
+    // on every theme change, including ones the user just made, immediately
+    // reverting them to the server's value.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  }, [loaded, preferences.theme]);
 
-  /**
-   * Change the theme.
-   *
-   * Note the order: the DOM and the cache update synchronously, and only then
-   * do we tell the server. The UI must never wait for a network round trip to
-   * repaint — a theme click that takes 200ms to visibly happen feels broken.
-   *
-   * This is an *optimistic* update: we assume the save will succeed. If it
-   * doesn't, the visible theme is still correct and still cached, so the only
-   * casualty is cross-device sync. Rolling the colour back to punish a failed
-   * request would be worse than leaving it.
-   */
   const setTheme = useCallback(
     (next: Theme) => {
+      // Apply to the page and the cache synchronously. The UI must never wait
+      // for a network round trip to repaint.
       applyTheme(next);
       setThemeState(next);
-
       try {
         localStorage.setItem(THEME_STORAGE_KEY, next);
       } catch {
-        // Storage unavailable — the theme still applies for this session.
+        // Storage unavailable.
       }
 
-      // Only signed-in users have an account to save to. Signed out, the theme
-      // still works — it's just local to this browser.
-      if (!user) {
-        setSaveState("idle");
-        return;
-      }
-
-      setSaveState("saving");
-
-      void api
-        .patch("/api/preferences", { theme: next })
-        .then(() => {
-          setSaveState("saved");
-        })
-        .catch((error) => {
-          // Surface this. The theme still looks right, so without a visible
-          // signal the user has no way to know it didn't sync to their account.
-          console.error("[theme] Could not save theme:", error);
-          setSaveState("error");
-        });
+      // And let the preferences owner handle persisting it.
+      updatePreferences({ theme: next });
     },
-    [user],
+    [updatePreferences],
   );
 
   const value = useMemo<ThemeContextValue>(

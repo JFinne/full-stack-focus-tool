@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App.tsx";
 import { AuthProvider } from "./auth/AuthProvider.tsx";
+import { PreferencesProvider } from "./preferences/PreferencesProvider.tsx";
 import { ThemeProvider } from "./theme/ThemeProvider.tsx";
 
 /**
@@ -32,11 +33,15 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        {/* Inside AuthProvider because it needs to know who's signed in, to
-            load their saved theme and save changes back to their account. */}
-        <ThemeProvider>
-          <App />
-        </ThemeProvider>
+        {/* PreferencesProvider is the single owner of everything in the
+            user_preferences table. It sits inside AuthProvider because it needs
+            to know who's signed in, and outside ThemeProvider because the theme
+            is one of the preferences it owns. */}
+        <PreferencesProvider>
+          <ThemeProvider>
+            <App />
+          </ThemeProvider>
+        </PreferencesProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

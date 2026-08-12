@@ -1,4 +1,5 @@
 import { createContext, useContext } from "react";
+import type { SaveState } from "../preferences/PreferencesContext";
 
 /**
  * ThemeContext.ts — the theme value, the theme list, and how a theme is applied.
@@ -84,17 +85,21 @@ export function readStoredTheme(): Theme {
 }
 
 /**
- * Whether the last save to the server worked.
+ * Save status now lives with the preferences owner, since it applies to every
+ * setting rather than to the theme specifically. Re-exported here so existing
+ * theme code doesn't need to know where it moved to.
  *
- * "error" specifically means: the theme you see is correct and cached locally,
- * but it did not reach your account, so it won't follow you to another device.
+ * It exists because of a real incident in chunk 4b: a broken endpoint silently
+ * rejected a dozen theme changes while the UI looked perfectly fine. Optimistic
+ * updates are right for something this cheap to re-apply, but "optimistic" must
+ * not mean "hides failure."
  *
- * This exists because of a real incident during development — a broken endpoint
- * silently rejected a dozen theme changes while the UI looked perfectly fine.
- * Optimistic updates are the right call for something this cheap to re-apply,
- * but "optimistic" must not mean "hides failure from the user."
+ * (This import and the `Theme` import in PreferencesContext.ts point at each
+ * other. That's safe because both are type-only, and types are erased before
+ * the code runs — there's no cycle at runtime. A cycle of *values* would be a
+ * real problem.)
  */
-export type SaveState = "idle" | "saving" | "saved" | "error";
+export type { SaveState } from "../preferences/PreferencesContext";
 
 export type ThemeContextValue = {
   theme: Theme;

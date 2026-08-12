@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { useTimer } from "../timer/TimerContext";
+import { useDocumentTitle } from "../timer/useDocumentTitle";
+import { PHASE_LABELS, formatDuration } from "../timer/timerLogic";
 
 /**
  * AppLayout — the frame every signed-in page renders inside.
@@ -26,6 +29,38 @@ import { useAuth } from "../auth/AuthContext";
  * count as active on *every* page. `end` says "only when the path matches
  * exactly." Without it, Home would be permanently highlighted.
  */
+/**
+ * A compact countdown in the navbar, linking back to the timer.
+ *
+ * Hidden while idle. A control that reads "25:00" when nothing is happening
+ * invites you to wonder whether it's running — showing nothing is unambiguous.
+ */
+function TimerBadge() {
+  const { phase, status, remainingMs } = useTimer();
+
+  if (status === "idle") return null;
+
+  return (
+    <NavLink
+      to="/timer"
+      className="btn btn-sm btn-ghost gap-2 tabular-nums"
+      title={`${PHASE_LABELS[phase]} — ${status === "paused" ? "paused" : "running"}`}
+    >
+      <span
+        className={`inline-block w-2 h-2 rounded-full ${
+          status === "paused"
+            ? "bg-base-content/40"
+            : phase === "work"
+              ? "bg-primary"
+              : "bg-success"
+        }`}
+        aria-hidden="true"
+      />
+      {formatDuration(remainingMs)}
+    </NavLink>
+  );
+}
+
 const NAV_ITEMS = [
   { to: "/", label: "Home", icon: "🏠", end: true },
   { to: "/timer", label: "Timer", icon: "⏱️" },
@@ -36,6 +71,11 @@ const NAV_ITEMS = [
 
 export function AppLayout() {
   const { user, logout } = useAuth();
+
+  // Keeps the browser tab title in sync with the timer. Lives here rather than
+  // on TimerPage because the whole point is to be visible from other pages —
+  // and from other tabs entirely.
+  useDocumentTitle();
 
   /**
    * Whether the slide-out drawer is open on narrow screens.
@@ -113,6 +153,10 @@ export function AppLayout() {
           </div>
 
           <div className="flex-none gap-2 items-center">
+            {/* A live timer readout, so you don't have to be on /timer to see
+                it. Only shown when there's something to report. */}
+            <TimerBadge />
+
             <span className="text-sm text-base-content/70 hidden sm:inline">
               {user?.displayName}
             </span>
