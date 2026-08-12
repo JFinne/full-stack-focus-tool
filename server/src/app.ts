@@ -24,6 +24,7 @@ import { prisma } from "./lib/prisma.js";
 import { attachUser } from "./middleware/auth.js";
 import { authRouter } from "./routes/auth.js";
 import { preferencesRouter } from "./routes/preferences.js";
+import { notesRouter } from "./routes/notes.js";
 
 // `express()` creates the application object. Everything else in this file is
 // either attaching middleware to it or attaching routes to it.
@@ -41,10 +42,16 @@ const app = express();
 // watches for requests that say "my body is JSON", parses that JSON, and hands
 // it to your route handlers as a ready-to-use object on `req.body`.
 // Without this line, `req.body` would be undefined on every POST you write.
-// A size limit on request bodies. The default is 100kb, but stating it makes
-// the decision visible: without a cap, anyone could try to exhaust the server's
-// memory by posting an enormous JSON document.
-app.use(express.json({ limit: "100kb" }));
+//
+// The size limit is Express's default of 100kb, stated explicitly to make the
+// decision visible: without a cap, anyone could try to exhaust the server's
+// memory by posting an enormous document.
+//
+// Note this cap and the 100k-character limit on note content are close enough
+// to collide — a maximum-length note plus JSON escaping can exceed 100kb and be
+// rejected here with a less helpful error than the one in routes/notes.ts. The
+// generous limit below leaves room for that.
+app.use(express.json({ limit: "1mb" }));
 
 // Parses the Cookie header into `req.cookies`. Express doesn't do this on its
 // own, and without it our session cookie would be an unparsed string.
@@ -90,6 +97,7 @@ app.get("/api/health", (_req, res) => {
 // Everything in routes/auth.ts, mounted under /api/auth.
 app.use("/api/auth", authRouter);
 app.use("/api/preferences", preferencesRouter);
+app.use("/api/notes", notesRouter);
 
 /**
  * GET /api/health/db

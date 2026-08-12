@@ -110,6 +110,37 @@ Three things fall out of this for free:
 - The logic is pure (`now` is a parameter, not a `Date.now()` call), so it's
   testable without waiting.
 
+## Notes and ownership
+
+Notes are the first model where one user has *many* rows, which makes ownership
+a real question for the first time. `GET /api/notes/:id` takes an id off the
+network, and someone else's id is just as valid a string as your own.
+
+**Ownership lives inside the query, never in a separate check:**
+
+```ts
+// not this — the check is a step someone can forget, and forgetting fails open
+const note = await prisma.note.findUnique({ where: { id } });
+if (note.ownerId !== req.user.id) return res.status(403);
+
+// this — a note that isn't yours is simply never found
+await prisma.note.findFirst({ where: { id, ownerId: req.user.id } });
+```
+
+The difference is what happens when a future edit is careless. A forgotten
+separate check keeps working perfectly for the person testing it while quietly
+serving everyone else's data. There is no equivalent mistake available in the
+second form. **Make the safe thing the only thing the query can express.**
+
+For the same reason `requireAuth` is applied once to the whole router rather
+than per-route, and `ownerId` comes from the session — never from the request
+body, or anyone could create (and later read) notes as someone else.
+
+**404, not 403,** when a note exists but isn't yours. 403 is more literally
+accurate and leaks more: it distinguishes "real id" from "no such id", letting
+someone enumerate what exists. Both cases returning 404 makes them
+indistinguishable from outside.
+
 ## Focus Mode
 
 Active **only while a focus phase is running** — off during breaks, when paused,
@@ -283,7 +314,8 @@ domain, so that exact line works there unchanged — dev and prod behave alike.
 - [x] **5b. Timer settings** — custom durations, tab-title countdown
 - [x] **5c. Completion alerts** — synthesized chime and desktop notifications
 - [x] **6. Focus Mode** — hides chosen add-ons while a focus phase runs
-- [ ] 7. Notes
+- [x] **7a. Notes API** — CRUD with ownership enforced in every query
+- [ ] 7b. Notes UI — list, editor, autosave
 - [ ] 8. Boards
 - [ ] 9. Sharing
 - [ ] 10. Weather → 11. Spotify

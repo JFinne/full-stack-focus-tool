@@ -86,7 +86,63 @@ model User {
   /// see the UserPreferences comment below.
   preferences UserPreferences?
 
+  /// Notes this user owns.
+  notes Note[]
+
   @@map("users")
+}
+
+/// A note written by a user.
+///
+/// This is the first model where one user has *many* rows. Everything before
+/// it — preferences, and effectively sessions — was one-per-user, which meant
+/// "is this yours?" was answered by the lookup itself.
+///
+/// Here it isn't. `GET /api/notes/:id` receives an id from the network, and the
+/// id of someone else's note is just as valid a string as your own. So every
+/// endpoint has to prove ownership rather than assume it. See routes/notes.ts.
+model Note {
+  id String @id @default(cuid())
+
+  /// Who owns this note.
+  ///
+  /// Named `ownerId` rather than `userId` on purpose. Chunk 9 adds sharing,
+  /// where a note will have one owner and several people with access — and at
+  /// that point "the user" becomes ambiguous in a way "the owner" doesn't.
+  /// Renaming a column later means a migration and touching every query; naming
+  /// it for the concept now costs nothing.
+  ownerId String
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  /// Title, shown in the list. Empty is allowed — an untitled draft is a real
+  /// thing, and forcing a title before you can write is hostile.
+  title String @default("")
+
+  /// The body.
+  ///
+  /// Prisma maps `String` to Postgres `text`, which has no length limit worth
+  /// worrying about. There's no reason to pick a VarChar(n) here: Postgres
+  /// stores them identically, and a cap would only produce a failure the day
+  /// someone pastes a long essay. The API caps it instead, where the limit can
+  /// be about protecting the server rather than about the data's nature.
+  content String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  /// The index that makes the list view fast.
+  ///
+  /// The list query is "notes where ownerId = me, newest first". A single index
+  /// on both columns serves that in one step — Postgres walks straight to this
+  /// user's rows and finds them already ordered. Indexing ownerId alone would
+  /// still require sorting the results afterwards.
+  ///
+  /// The column order matters: ownerId first because it's the equality filter,
+  /// updatedAt second because it's the sort. Reversed, the index would be
+  /// nearly useless for this query.
+  @@index([ownerId, updatedAt])
+  @@map("notes")
 }
 
 /// Everything the user can configure about how the app behaves.
