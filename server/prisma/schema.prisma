@@ -152,6 +152,27 @@ model UserPreferences {
   /// promise we can't keep, since we'd still need permission we don't have.
   notificationsEnabled Boolean @default(false)
 
+  /// Which add-ons disappear while a focus phase is running, e.g. ["notes"].
+  ///
+  /// This is a native Postgres text array, not a JSON blob. The distinction
+  /// matters: Postgres knows this is a list of strings and will reject anything
+  /// else, and Prisma types it as `string[]` rather than an opaque `Json` you
+  /// have to cast and hope about. A JSON column would accept `{"lol": 1}`
+  /// without complaint.
+  ///
+  /// Why an array rather than a join table, having argued for a separate table
+  /// when preferences first came up: the deciding factor is the access pattern.
+  /// We only ever read this as a whole set, for one user, alongside their other
+  /// preferences. We have no cross-user question to ask of it — nothing wants
+  /// "how many people hide Notes?" A join table would add a table and a query
+  /// to serve a shape we never query.
+  ///
+  /// What we give up is referential integrity: nothing stops a stale key like
+  /// "spotify" surviving here after that add-on is renamed. The API validates
+  /// against the known list on write, and the client ignores unknown keys on
+  /// read, so a stale entry is inert rather than harmful.
+  focusHiddenAddons String[] @default([])
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -40,6 +40,19 @@ export const AVAILABLE_THEMES = [
 ] as const;
 
 /**
+ * Add-ons that Focus Mode is allowed to hide.
+ *
+ * Mirrors the `restrictable: true` entries in client/src/addons.ts. As with the
+ * theme list, the client's copy exists for labels and this one is the
+ * authority — a client can be modified by whoever runs it, so the server can
+ * never simply trust the keys it's sent.
+ *
+ * Deliberately excludes "timer", "home", and "settings". Focus Mode ends by
+ * pausing the timer, so a stored "timer" key would hide the exit.
+ */
+export const RESTRICTABLE_ADDON_KEYS = ["notes", "boards"] as const;
+
+/**
  * Bounds on the timer durations.
  *
  * These are not arbitrary fussiness. Anyone can call this endpoint directly, so
@@ -83,6 +96,30 @@ const updateSchema = z.object({
     .optional(),
   soundEnabled: z.boolean().optional(),
   notificationsEnabled: z.boolean().optional(),
+
+  /**
+   * Add-on keys to hide during focus phases.
+   *
+   * Validated against a fixed list rather than accepting any strings. Without
+   * that, this column would slowly fill with typos and keys from features that
+   * no longer exist, and nothing would ever clean it up.
+   *
+   * `.transform` deduplicates. Postgres arrays permit repeats, and a duplicate
+   * here is meaningless — hiding "notes" twice is still hiding it once — so we
+   * normalise on the way in rather than defending against it on every read.
+   *
+   * Note the order, which caused a real bug on the first attempt. Zod applies
+   * checks *before* transforms, so a `.max(2)` here saw the raw array — and
+   * `["notes","notes","boards","notes"]` was rejected as "too many" despite
+   * collapsing to two entries. The limit now bounds the *input* generously
+   * (so a caller can't post a million-element array) and lets dedup produce
+   * the real result, which the enum already caps at the number of valid keys.
+   */
+  focusHiddenAddons: z
+    .array(z.enum(RESTRICTABLE_ADDON_KEYS))
+    .max(100, "Too many add-ons listed")
+    .transform((keys) => [...new Set(keys)])
+    .optional(),
 });
 
 /**
@@ -105,6 +142,7 @@ const DEFAULT_PREFERENCES = {
   sessionsBeforeLongBreak: 4,
   soundEnabled: true,
   notificationsEnabled: false,
+  focusHiddenAddons: [] as string[],
 };
 
 /**
@@ -120,6 +158,7 @@ const PREFERENCE_FIELDS = {
   sessionsBeforeLongBreak: true,
   soundEnabled: true,
   notificationsEnabled: true,
+  focusHiddenAddons: true,
 } as const;
 
 preferencesRouter.get("/", requireAuth, async (req, res) => {

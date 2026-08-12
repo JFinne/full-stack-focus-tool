@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { ADDONS } from "../addons";
+import { useFocusMode } from "../focus/useFocusMode";
 import { useTimer } from "../timer/TimerContext";
 import { useDocumentTitle } from "../timer/useDocumentTitle";
 import { PHASE_LABELS, formatDuration } from "../timer/timerLogic";
@@ -18,17 +20,6 @@ import { PHASE_LABELS, formatDuration } from "../timer/timerLogic";
  * the whole chrome.
  */
 
-/**
- * The navigation items, defined once.
- *
- * Both the sidebar and any future mobile menu read from this array, so adding a
- * tool means adding one entry rather than editing several lists and hoping they
- * stay in sync.
- *
- * `end` matters for the "/" route. React Router matches by prefix, so "/" would
- * count as active on *every* page. `end` says "only when the path matches
- * exactly." Without it, Home would be permanently highlighted.
- */
 /**
  * A compact countdown in the navbar, linking back to the timer.
  *
@@ -61,13 +52,32 @@ function TimerBadge() {
   );
 }
 
-const NAV_ITEMS = [
-  { to: "/", label: "Home", icon: "🏠", end: true },
-  { to: "/timer", label: "Timer", icon: "⏱️" },
-  { to: "/notes", label: "Notes", icon: "📝" },
-  { to: "/boards", label: "Boards", icon: "🗂️" },
-  { to: "/settings", label: "Settings", icon: "⚙️" },
-];
+/**
+ * Focus Mode indicator for the navbar.
+ *
+ * Worth showing because Focus Mode changes what the app does without the user
+ * having done anything at that moment. Sidebar items quietly vanishing would
+ * read as a bug; a visible badge makes it obviously deliberate.
+ *
+ * Hidden when Focus Mode is off, and also when the user hasn't chosen to
+ * restrict anything — a badge announcing a restriction that restricts nothing
+ * is just noise.
+ */
+function FocusBadge() {
+  const { isActive, hasRestrictions } = useFocusMode();
+
+  if (!isActive || !hasRestrictions) return null;
+
+  return (
+    <span
+      className="badge badge-primary badge-sm gap-1"
+      title="Some tools are hidden while you focus"
+    >
+      <span aria-hidden="true">🎯</span>
+      Focus
+    </span>
+  );
+}
 
 export function AppLayout() {
   const { user, logout } = useAuth();
@@ -76,6 +86,9 @@ export function AppLayout() {
   // on TimerPage because the whole point is to be visible from other pages —
   // and from other tabs entirely.
   useDocumentTitle();
+
+  // Which add-ons Focus Mode is hiding right now.
+  const { isHidden } = useFocusMode();
 
   /**
    * Whether the slide-out drawer is open on narrow screens.
@@ -155,6 +168,7 @@ export function AppLayout() {
           <div className="flex-none gap-2 items-center">
             {/* A live timer readout, so you don't have to be on /timer to see
                 it. Only shown when there's something to report. */}
+            <FocusBadge />
             <TimerBadge />
 
             <span className="text-sm text-base-content/70 hidden sm:inline">
@@ -199,8 +213,13 @@ export function AppLayout() {
 
           <nav className="p-2">
             <ul className="menu w-full gap-1">
-              {NAV_ITEMS.map((item) => (
-                <li key={item.to}>
+              {/*
+                Built from the add-on registry, minus anything Focus Mode is
+                currently hiding. The registry is the single list — the home
+                page and the Focus Mode settings read the same one.
+              */}
+              {ADDONS.filter((addon) => !isHidden(addon.key)).map((addon) => (
+                <li key={addon.key}>
                   {/*
                     NavLink is Link plus awareness of whether it's active.
                     Passing a function to className receives { isActive }, which
@@ -212,13 +231,16 @@ export function AppLayout() {
                     and the user would see a white flash on every click.
                   */}
                   <NavLink
-                    to={item.to}
-                    end={item.end}
+                    to={addon.path}
+                    // `end` matters only for "/". React Router matches by
+                    // prefix, so without it Home would be highlighted on every
+                    // page.
+                    end={addon.path === "/"}
                     className={({ isActive }) => (isActive ? "active" : "")}
                     onClick={() => setDrawerOpen(false)}
                   >
-                    <span aria-hidden="true">{item.icon}</span>
-                    {item.label}
+                    <span aria-hidden="true">{addon.icon}</span>
+                    {addon.label}
                   </NavLink>
                 </li>
               ))}

@@ -1,5 +1,48 @@
+import { Link } from "react-router-dom";
 import { useTimer } from "../timer/TimerContext";
 import { PHASE_LABELS, formatDuration } from "../timer/timerLogic";
+import { useFocusMode } from "../focus/useFocusMode";
+import { getAddon } from "../addons";
+
+/**
+ * A summary of what Focus Mode is doing, on the page where you'd look for it.
+ *
+ * Three states, because "nothing is hidden" and "things are hidden but the
+ * session isn't running" mean different things to someone deciding whether the
+ * feature is working.
+ */
+function FocusModeStatus() {
+  const { isActive, hiddenKeys, hasRestrictions } = useFocusMode();
+
+  if (!hasRestrictions) {
+    return (
+      <div className="text-xs text-base-content/50 text-center">
+        Focus Mode isn't hiding anything yet —{" "}
+        <Link to="/settings" className="link">
+          choose what to put away
+        </Link>
+        .
+      </div>
+    );
+  }
+
+  const names = [...hiddenKeys]
+    .map((key) => getAddon(key)?.label ?? key)
+    .join(" and ");
+
+  return (
+    <div
+      className={`alert text-sm ${isActive ? "alert-info" : ""}`}
+      role="status"
+    >
+      <span>
+        {isActive
+          ? `Focus Mode is on — ${names} ${hiddenKeys.size === 1 ? "is" : "are"} hidden. Pause to bring ${hiddenKeys.size === 1 ? "it" : "them"} back.`
+          : `${names} will be hidden once a focus session starts.`}
+      </span>
+    </div>
+  );
+}
 
 /**
  * TimerPage — the Pomodoro timer.
@@ -158,6 +201,8 @@ export function TimerPage() {
           </p>
         </div>
       </section>
+
+      <FocusModeStatus />
 
       <p className="text-xs text-base-content/50 text-center">
         Change these durations in Settings.

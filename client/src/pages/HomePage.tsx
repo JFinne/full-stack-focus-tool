@@ -1,6 +1,8 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { useApiStatus } from "../hooks/useApiStatus";
+import { ADDONS } from "../addons";
+import { useFocusMode } from "../focus/useFocusMode";
 
 /**
  * HomePage — the landing view once signed in.
@@ -16,37 +18,17 @@ type DbHealthResponse = {
   userCount: number;
 };
 
-/** What's built and what isn't — a visible progress marker. */
-const TOOLS = [
-  {
-    to: "/timer",
-    name: "Pomodoro Timer",
-    detail: "Work intervals and Focus Mode",
-    ready: false,
-  },
-  {
-    to: "/notes",
-    name: "Notes",
-    detail: "Documents, shareable later",
-    ready: false,
-  },
-  {
-    to: "/boards",
-    name: "Boards",
-    detail: "Lists and cards for assignments",
-    ready: false,
-  },
-  {
-    to: "/settings",
-    name: "Settings",
-    detail: "Themes and preferences",
-    ready: false,
-  },
-];
-
 export function HomePage() {
   const { user } = useAuth();
   const db = useApiStatus<DbHealthResponse>("/api/health/db");
+  const { isActive, isHidden } = useFocusMode();
+
+  // The registry again, minus Home itself (you're on it) and anything Focus
+  // Mode is currently hiding. Previously this page kept its own hardcoded list,
+  // which is exactly the duplication the registry removed.
+  const tools = ADDONS.filter(
+    (addon) => addon.key !== "home" && !isHidden(addon.key),
+  );
 
   return (
     <div className="space-y-4">
@@ -60,26 +42,40 @@ export function HomePage() {
         </div>
       </div>
 
+      {isActive && (
+        <div className="alert alert-info text-sm">
+          <span>
+            Focus session in progress. Anything you chose to hide is tucked away
+            until you pause or the session ends.
+          </span>
+        </div>
+      )}
+
       <div className="grid gap-3 sm:grid-cols-2">
-        {TOOLS.map((tool) => (
+        {tools.map((tool) => (
           // Link renders an <a> but intercepts the click, so navigation happens
           // in JavaScript without a full page reload. Using a raw <a href> here
           // would reload the app and throw away the auth context.
           <Link
-            key={tool.to}
-            to={tool.to}
+            key={tool.key}
+            to={tool.path}
             className="card bg-base-100 shadow hover:shadow-md transition-shadow"
           >
             <div className="card-body p-4">
               <div className="flex items-center justify-between gap-2">
-                <h2 className="font-medium">{tool.name}</h2>
-                {!tool.ready && (
+                <h2 className="font-medium">
+                  <span aria-hidden="true" className="mr-1">
+                    {tool.icon}
+                  </span>
+                  {tool.label}
+                </h2>
+                {!tool.built && (
                   <span className="badge badge-ghost badge-sm shrink-0">
                     Soon
                   </span>
                 )}
               </div>
-              <p className="text-xs text-base-content/60">{tool.detail}</p>
+              <p className="text-xs text-base-content/60">{tool.description}</p>
             </div>
           </Link>
         ))}

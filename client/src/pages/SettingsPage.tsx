@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { usePreferences } from "../preferences/PreferencesContext";
+import { RESTRICTABLE_ADDONS } from "../addons";
+import { useFocusMode } from "../focus/useFocusMode";
 import { THEMES, useTheme, type Theme } from "../theme/ThemeContext";
 import { playChime, unlockAudio } from "../timer/chime";
 import {
@@ -78,6 +80,9 @@ export function SettingsPage() {
 
       {/* ---- Timer ---- */}
       <TimerSettings />
+
+      {/* ---- Focus Mode ---- */}
+      <FocusModeSettings />
 
       {/* ---- Alerts ---- */}
       <AlertSettings />
@@ -164,6 +169,85 @@ function TimerSettings() {
             error={fieldErrors.sessionsBeforeLongBreak}
             onCommit={(v) => updatePreferences({ sessionsBeforeLongBreak: v })}
           />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * FocusModeSettings — which tools disappear while you're focusing.
+ *
+ * Only add-ons marked `restrictable` appear here. Home, Timer, and Settings are
+ * excluded by the registry rather than by a check in this component: the rule
+ * "you can't hide your way out of the exit" belongs with the data, so every
+ * surface enforces it without having to remember to.
+ */
+function FocusModeSettings() {
+  const { preferences, updatePreferences } = usePreferences();
+  const { isActive } = useFocusMode();
+
+  const hidden = new Set(preferences.focusHiddenAddons);
+
+  function toggle(key: string, shouldHide: boolean) {
+    const next = new Set(hidden);
+    if (shouldHide) {
+      next.add(key);
+    } else {
+      next.delete(key);
+    }
+    // Send the whole array. This field is a set, and a set's meaning is "these
+    // and no others" — so replacing it wholesale is the correct semantics, even
+    // though the request itself is a PATCH of one field.
+    updatePreferences({ focusHiddenAddons: [...next] });
+  }
+
+  return (
+    <section className="card bg-base-100 shadow">
+      <div className="card-body">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="card-title text-base">Focus Mode</h2>
+          {isActive && (
+            <span className="badge badge-primary badge-sm">Active now</span>
+          )}
+        </div>
+
+        <p className="text-sm text-base-content/70">
+          These are hidden while a focus session is running, and come back
+          during breaks or when you pause.
+        </p>
+
+        <div className="mt-3 space-y-1">
+          {RESTRICTABLE_ADDONS.map((addon) => (
+            <div key={addon.key} className="form-control">
+              <label className="label cursor-pointer justify-start gap-3 py-1">
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-primary checkbox-sm"
+                  checked={hidden.has(addon.key)}
+                  onChange={(e) => toggle(addon.key, e.target.checked)}
+                />
+                <span className="label-text">
+                  <span aria-hidden="true" className="mr-1">
+                    {addon.icon}
+                  </span>
+                  Hide {addon.label}
+                </span>
+              </label>
+            </div>
+          ))}
+        </div>
+
+        {/*
+          The honest limitation, stated where someone configuring this will
+          read it. A focus tool that let you believe it blocks YouTube would be
+          worse than one that tells you it can't.
+        */}
+        <div className="alert alert-info mt-3 text-xs">
+          <span>
+            Focus Mode only hides things inside this app. A website can't block
+            other sites or apps — pausing your session brings everything back.
+          </span>
         </div>
       </div>
     </section>

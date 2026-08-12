@@ -9,6 +9,7 @@ import { BoardsPage } from "./pages/BoardsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { TimerProvider } from "./timer/TimerProvider";
+import { FocusGuard } from "./focus/FocusGuard";
 
 /**
  * App — the auth gate, and the route table for signed-in users.
@@ -75,8 +76,27 @@ function App() {
       <Route element={<AppLayout />}>
         <Route index element={<HomePage />} />
         <Route path="timer" element={<TimerPage />} />
-        <Route path="notes" element={<NotesPage />} />
-        <Route path="boards" element={<BoardsPage />} />
+        {/*
+          Restrictable pages are wrapped so the block lives at the route, not
+          just on the sidebar link. Hiding a nav item leaves the URL, bookmarks,
+          and the back button all still working.
+        */}
+        <Route
+          path="notes"
+          element={
+            <FocusGuard addonKey="notes">
+              <NotesPage />
+            </FocusGuard>
+          }
+        />
+        <Route
+          path="boards"
+          element={
+            <FocusGuard addonKey="boards">
+              <BoardsPage />
+            </FocusGuard>
+          }
+        />
         <Route path="settings" element={<SettingsPage />} />
 
         {/* "*" matches anything not caught above. It sits inside the layout on

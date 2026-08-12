@@ -31,6 +31,8 @@ export type Preferences = {
   soundEnabled: boolean;
   /** Whether the user wants notifications — not whether the browser allows them. */
   notificationsEnabled: boolean;
+  /** Add-on keys hidden while a focus phase runs, e.g. ["notes", "boards"]. */
+  focusHiddenAddons: string[];
 };
 
 /**
@@ -51,6 +53,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   sessionsBeforeLongBreak: 4,
   soundEnabled: true,
   notificationsEnabled: false,
+  focusHiddenAddons: [],
 };
 
 /** Status of the last attempt to save. See the note in ThemeContext.ts. */

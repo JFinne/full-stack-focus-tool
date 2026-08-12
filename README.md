@@ -110,6 +110,33 @@ Three things fall out of this for free:
 - The logic is pure (`now` is a parameter, not a `Date.now()` call), so it's
   testable without waiting.
 
+## Focus Mode
+
+Active **only while a focus phase is running** — off during breaks, when paused,
+and when idle. Pausing is therefore the escape hatch, which makes leaving a
+deliberate act rather than an impossible one.
+
+**What it honestly is:** it hides parts of *this app*. A website cannot block
+Discord, YouTube, or your phone — browsers forbid it. So this shapes your
+workspace rather than enforcing abstinence, and the UI says so rather than
+implying more. Designing to that ceiling beats pretending it isn't there.
+
+`useFocusMode` is a hook with no provider, unlike every other piece of shared
+state here. It stores nothing: whether Focus Mode is on is derived from the
+timer, and what it hides comes from preferences. Both already live in contexts,
+so a third copy would only be something new to keep in sync. **Derived state
+should be computed, not stored** — same principle as the timer deriving its
+remaining time.
+
+Restrictions are enforced at the **route**, via `FocusGuard`, not just by hiding
+sidebar links. A hidden link still leaves the URL, bookmarks, and the back
+button working — and a restriction you can stumble past teaches you it's fake.
+
+`client/src/addons.ts` is the single registry the sidebar, home page, Focus Mode
+settings, and route guards all read. `restrictable: false` on Home, Timer, and
+Settings is what prevents configuring yourself into a corner with no exit — the
+rule lives with the data, so every surface gets it without remembering to check.
+
 ### Completion alerts
 
 Both are shaped by browser policies that exist because of past abuse, and both
@@ -255,7 +282,7 @@ domain, so that exact line works there unchanged — dev and prod behave alike.
 - [x] **5a. Pomodoro timer** — drift-free engine, survives tab switches and reloads
 - [x] **5b. Timer settings** — custom durations, tab-title countdown
 - [x] **5c. Completion alerts** — synthesized chime and desktop notifications
-- [ ] 6. Focus Mode
+- [x] **6. Focus Mode** — hides chosen add-ons while a focus phase runs
 - [ ] 7. Notes
 - [ ] 8. Boards
 - [ ] 9. Sharing
