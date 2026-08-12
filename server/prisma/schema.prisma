@@ -82,7 +82,47 @@ model User {
   /// `prisma.user.findUnique({ include: { sessions: true } })`.
   sessions Session[]
 
+  /// This user's settings. Optional (`?`) because the row is created lazily —
+  /// see the UserPreferences comment below.
+  preferences UserPreferences?
+
   @@map("users")
+}
+
+/// Everything the user can configure about how the app behaves.
+///
+/// This is a separate table rather than columns on `users` because the two hold
+/// different kinds of thing. `users` answers "who is this?" and is nearly
+/// immutable. Preferences answer "how do they like it?" and will grow steadily
+/// — Pomodoro durations, Focus Mode rules, which add-ons are enabled. Keeping
+/// them apart means the users table stays small and stable while this one
+/// changes freely.
+///
+/// It is a *one-to-one* relation: each user has at most one preferences row.
+/// The `@unique` on userId is what enforces that — without it, the same user
+/// could have many preference rows and nothing would say which one counts.
+model UserPreferences {
+  id String @id @default(cuid())
+
+  /// `@unique` is what makes this one-to-one rather than one-to-many.
+  userId String @unique
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// The DaisyUI theme name, or "system" to follow the OS setting.
+  ///
+  /// Stored as a plain string rather than a database enum. An enum would let
+  /// Postgres reject invalid values, which sounds better — but adding a theme
+  /// would then require a migration, and theme names are a presentation detail
+  /// that shouldn't be baked into the database's type system. We validate
+  /// against an allowlist in the API instead, which is where the list of
+  /// available themes actually lives.
+  theme String @default("system")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_preferences")
 }
 
 /// One active login. A row here means "this browser is signed in as this user."

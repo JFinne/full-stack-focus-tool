@@ -80,6 +80,38 @@ is gitignored rather than committed.
 Setup on a new machine: copy `server/.env.example` to `server/.env` and fill in
 `DATABASE_URL` from the [Neon](https://neon.tech) dashboard.
 
+## Theming
+
+The current theme lives in three places, each for a different reason:
+
+| Where | Role |
+| --- | --- |
+| `<html data-theme>` | What you actually see |
+| `localStorage` | Cache, so the next load is instant |
+| `user_preferences` table | Source of truth, so it follows you across devices |
+
+The rules that keep them in agreement: on load, trust the cache; once signed
+in, the server wins if it disagrees; on change, apply locally first and save in
+the background.
+
+**Why an inline script in `index.html`.** The cached theme is applied by a
+blocking script in `<head>`, before React loads. This cannot be done in React —
+not even in the first `useEffect` — because React runs *after* the first paint
+by definition, so the page would paint with the default theme and then repaint.
+For a dark-theme user that's a white flash on every single load.
+
+Adding a theme means updating **three** places: the `themes:` list in
+`client/src/index.css` (controls what CSS is bundled), `THEMES` in
+`client/src/theme/ThemeContext.ts` (labels for the picker), and
+`AVAILABLE_THEMES` in `server/src/routes/preferences.ts` (the allowlist that
+actually validates). The server's copy is the one that matters — a client can be
+modified by its user, so the server never trusts what it's told.
+
+Preference rows are created **lazily**, on first save rather than at
+registration. So nothing is written for users who never change a setting, and
+adding a new preference later needs no backfill — `GET` returns defaults when
+there's no row, and `PATCH` upserts.
+
 ## Routing
 
 React Router, wired declaratively in `App.tsx`. `AppLayout` is a parent route
@@ -153,7 +185,7 @@ domain, so that exact line works there unchanged — dev and prod behave alike.
 - [x] **3a. Auth (server)** — register, login, logout, sessions, `requireAuth`
 - [x] **3b. Auth (client)** — signup/login forms and the signed-in gate
 - [x] **4a. App shell** — routing, persistent sidebar, page scaffolding
-- [ ] 4b. Theme switcher — DaisyUI themes + `UserPreferences` table
+- [x] **4b. Theme switcher** — DaisyUI themes + `UserPreferences` table
 - [ ] 5. Pomodoro timer
 - [ ] 6. Focus Mode
 - [ ] 7. Notes

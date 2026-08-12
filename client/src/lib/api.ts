@@ -111,4 +111,19 @@ export const api = {
       body: data === undefined ? undefined : JSON.stringify(data),
     });
   },
+
+  /**
+   * PATCH sends a partial update: "change these fields, leave the rest alone."
+   *
+   * Distinct from PUT, which means "replace the whole thing with this" — where
+   * omitting a field says to clear it. PATCH is what you want for settings
+   * screens, where a client changing one option shouldn't have to resend every
+   * other option it happens to know about.
+   */
+  patch<T>(path: string, data: unknown): Promise<T> {
+    return request<T>(path, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
 };

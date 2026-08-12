@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import "./index.css";
 import App from "./App.tsx";
 import { AuthProvider } from "./auth/AuthProvider.tsx";
+import { ThemeProvider } from "./theme/ThemeProvider.tsx";
 
 /**
  * main.tsx — where React attaches to the page.
@@ -31,7 +32,11 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <App />
+        {/* Inside AuthProvider because it needs to know who's signed in, to
+            load their saved theme and save changes back to their account. */}
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>
       </AuthProvider>
     </BrowserRouter>
   </StrictMode>,

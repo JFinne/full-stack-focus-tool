@@ -23,6 +23,7 @@ import cookieParser from "cookie-parser";
 import { prisma } from "./lib/prisma.js";
 import { attachUser } from "./middleware/auth.js";
 import { authRouter } from "./routes/auth.js";
+import { preferencesRouter } from "./routes/preferences.js";
 
 // `express()` creates the application object. Everything else in this file is
 // either attaching middleware to it or attaching routes to it.
@@ -88,6 +89,7 @@ app.get("/api/health", (_req, res) => {
 
 // Everything in routes/auth.ts, mounted under /api/auth.
 app.use("/api/auth", authRouter);
+app.use("/api/preferences", preferencesRouter);
 
 /**
  * GET /api/health/db

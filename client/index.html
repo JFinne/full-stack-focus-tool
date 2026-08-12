@@ -5,6 +5,45 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Focus Tool</title>
+
+    <!--
+      Apply the saved theme BEFORE anything renders.
+
+      This has to be an inline, blocking script in <head>, and the placement is
+      the entire point. The browser pauses parsing to run it, so `data-theme` is
+      already set on <html> before a single pixel is painted.
+
+      Do this in React instead — even in the very first useEffect — and the page
+      paints once with the default theme, then repaints with yours. That's the
+      "flash of wrong theme", and on a dark-theme user's screen it's a white
+      flash on every single page load. Nothing React can do avoids it, because
+      React runs after the first paint by definition.
+
+      The trade-off we accepted: localStorage is a *cache* of the real value,
+      which lives on the server. It can briefly be out of date — change your
+      theme on your phone and this laptop shows the old one until ThemeProvider
+      syncs a moment later. Being instantly right 99% of the time beats being
+      correct after a flash every time.
+
+      Written in plain ES5 with no bundler involvement, because it runs before
+      any of our JavaScript is loaded. The try/catch matters: localStorage
+      throws in Safari private mode and when cookies are blocked entirely, and
+      an exception here would stop the page loading.
+    -->
+    <script>
+      (function () {
+        try {
+          var theme = localStorage.getItem("focus-theme");
+          // "system" (and no value at all) means: set nothing, and let the
+          // --default / --prefersdark markers in index.css decide.
+          if (theme && theme !== "system") {
+            document.documentElement.setAttribute("data-theme", theme);
+          }
+        } catch (e) {
+          /* localStorage unavailable — fall back to the default theme. */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
