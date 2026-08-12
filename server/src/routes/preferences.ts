@@ -81,6 +81,8 @@ const updateSchema = z.object({
     .min(1, "There must be at least 1 session before a long break")
     .max(12, "There can be at most 12 sessions before a long break")
     .optional(),
+  soundEnabled: z.boolean().optional(),
+  notificationsEnabled: z.boolean().optional(),
 });
 
 /**
@@ -101,6 +103,8 @@ const DEFAULT_PREFERENCES = {
   shortBreakMinutes: 5,
   longBreakMinutes: 15,
   sessionsBeforeLongBreak: 4,
+  soundEnabled: true,
+  notificationsEnabled: false,
 };
 
 /**
@@ -114,6 +118,8 @@ const PREFERENCE_FIELDS = {
   shortBreakMinutes: true,
   longBreakMinutes: true,
   sessionsBeforeLongBreak: true,
+  soundEnabled: true,
+  notificationsEnabled: true,
 } as const;
 
 preferencesRouter.get("/", requireAuth, async (req, res) => {

@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { usePreferences } from "../preferences/PreferencesContext";
 import { THEMES, useTheme, type Theme } from "../theme/ThemeContext";
+import { playChime, unlockAudio } from "../timer/chime";
+import {
+  getNotificationState,
+  requestNotificationPermission,
+  type NotificationState,
+} from "../timer/notifications";
 
 /**
  * SettingsPage — account settings. Right now that means the theme.
@@ -72,6 +78,9 @@ export function SettingsPage() {
 
       {/* ---- Timer ---- */}
       <TimerSettings />
+
+      {/* ---- Alerts ---- */}
+      <AlertSettings />
 
       {/* ---- Account ---- */}
       <section className="card bg-base-100 shadow">
@@ -155,6 +164,174 @@ function TimerSettings() {
             error={fieldErrors.sessionsBeforeLongBreak}
             onCommit={(v) => updatePreferences({ sessionsBeforeLongBreak: v })}
           />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * AlertSettings — how you find out a phase ended.
+ *
+ * The interesting part is the notification toggle, because "on" means two
+ * different things that can disagree: what the user wants (saved to their
+ * account, follows them everywhere) and what this browser permits (per-device,
+ * outside our control, and effectively unaskable once refused).
+ */
+function AlertSettings() {
+  const { preferences, updatePreferences } = usePreferences();
+
+  /**
+   * The browser's permission state, mirrored into React state.
+   *
+   * It has to be mirrored because `Notification.permission` is a plain property
+   * that changes without telling us — nothing re-renders when the user answers
+   * the prompt or flips it in browser settings. We read it on mount and after
+   * we request, which covers the cases we can actually observe.
+   */
+  const [permission, setPermission] = useState<NotificationState>(() =>
+    getNotificationState(),
+  );
+
+  async function handleNotificationToggle(wantsOn: boolean) {
+    if (!wantsOn) {
+      updatePreferences({ notificationsEnabled: false });
+      return;
+    }
+
+    /**
+     * Turning it on is where we ask.
+     *
+     * This click is the ideal moment: the request is expected, its purpose is
+     * obvious, and it's attached to a real user gesture — which browsers
+     * increasingly require. Asking on page load instead would spend our single
+     * chance at the moment the user is least likely to say yes.
+     */
+    const result =
+      getNotificationState() === "default"
+        ? await requestNotificationPermission()
+        : getNotificationState();
+
+    setPermission(result);
+
+    // Save the *intent* regardless of the answer. If they said no here but
+    // allow notifications on their laptop later, the preference is already set
+    // and it just starts working — rather than needing to be turned on twice.
+    updatePreferences({ notificationsEnabled: true });
+  }
+
+  const notificationsWanted = preferences.notificationsEnabled;
+
+  return (
+    <section className="card bg-base-100 shadow">
+      <div className="card-body">
+        <h2 className="card-title text-base">Alerts</h2>
+        <p className="text-sm text-base-content/70">
+          How you're told a phase has ended.
+        </p>
+
+        <div className="mt-3 space-y-3">
+          {/* Sound */}
+          <div className="form-control">
+            <label className="label cursor-pointer justify-start gap-3 py-1">
+              <input
+                type="checkbox"
+                className="toggle toggle-primary"
+                checked={preferences.soundEnabled}
+                onChange={(e) => {
+                  // Unlocking here means the *preview* below can play
+                  // immediately — this click is a user gesture, and the one
+                  // 25 minutes from now won't be.
+                  if (e.target.checked) unlockAudio();
+                  updatePreferences({ soundEnabled: e.target.checked });
+                }}
+              />
+              <span className="label-text">Play a chime</span>
+            </label>
+
+            {preferences.soundEnabled && (
+              <div className="ml-14 mt-1 flex gap-2">
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost"
+                  onClick={() => {
+                    unlockAudio();
+                    playChime("workEnded");
+                  }}
+                >
+                  Preview focus chime
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-xs btn-ghost"
+                  onClick={() => {
+                    unlockAudio();
+                    playChime("breakEnded");
+                  }}
+                >
+                  Preview break chime
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Notifications */}
+          <div className="form-control">
+            <label className="label cursor-pointer justify-start gap-3 py-1">
+              <input
+                type="checkbox"
+                className="toggle toggle-primary"
+                checked={notificationsWanted}
+                disabled={permission === "unsupported"}
+                onChange={(e) => void handleNotificationToggle(e.target.checked)}
+              />
+              <span className="label-text">
+                Desktop notification when the tab is hidden
+              </span>
+            </label>
+
+            {/*
+              The two-state problem made visible.
+
+              Each message below is a different combination of "what you want"
+              and "what this browser allows", and they need different words —
+              a single generic "notifications are off" would be actively
+              misleading in at least two of these cases.
+            */}
+            <div className="ml-14 mt-1 text-xs">
+              {permission === "unsupported" && (
+                <span className="text-base-content/50">
+                  This browser doesn't support notifications.
+                </span>
+              )}
+
+              {permission === "denied" && notificationsWanted && (
+                <span className="text-warning">
+                  Blocked by your browser on this device. Your preference is
+                  saved, so allowing notifications in your browser's site
+                  settings will switch them on here.
+                </span>
+              )}
+
+              {permission === "granted" && notificationsWanted && (
+                <span className="text-success">
+                  Allowed on this device.
+                </span>
+              )}
+
+              {permission === "default" && notificationsWanted && (
+                <span className="text-base-content/50">
+                  Waiting for permission on this device.
+                </span>
+              )}
+
+              {!notificationsWanted && permission !== "unsupported" && (
+                <span className="text-base-content/50">
+                  Only shown when the app isn't the tab you're looking at.
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </section>

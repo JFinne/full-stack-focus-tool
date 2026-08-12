@@ -137,6 +137,21 @@ model UserPreferences {
   /// How many focus sessions before a long break.
   sessionsBeforeLongBreak Int @default(4)
 
+  /// Play a chime when a phase ends. On by default — it's the least intrusive
+  /// way to be told, and the whole point of a timer is not having to watch it.
+  soundEnabled Boolean @default(true)
+
+  /// Whether the user *wants* desktop notifications.
+  ///
+  /// Note this is intent, not capability. Notification permission is granted
+  /// per browser, per device, and lives outside our database entirely — so a
+  /// user can have this true while the browser they're currently sitting at has
+  /// never been asked, or has refused. The UI has to reflect both.
+  ///
+  /// Off by default. Defaulting a notification setting to on would be a
+  /// promise we can't keep, since we'd still need permission we don't have.
+  notificationsEnabled Boolean @default(false)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

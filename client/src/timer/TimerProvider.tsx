@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePreferences } from "../preferences/PreferencesContext";
+import { playChime, unlockAudio } from "./chime";
+import { showNotification } from "./notifications";
 import { TimerContext, type TimerContextValue } from "./TimerContext";
 import {
   PHASES,
@@ -178,10 +180,73 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
    */
   useEffect(() => {
     if (state.status === "running" && remainingMs <= 0) {
+      // `state.phase` is still the phase that just *ended* — advancePhase
+      // hasn't run yet. That's what we want for choosing the alert.
+      const endedPhase = state.phase;
+
+      if (preferences.soundEnabled) {
+        playChime(endedPhase === "work" ? "workEnded" : "breakEnded");
+      }
+
+      /**
+       * Only notify when the tab is hidden.
+       *
+       * A desktop notification for something you're already looking at is pure
+       * noise — the screen has a large countdown reading 0:00 and a message
+       * saying so. Notifications exist to reach you when the app cannot.
+       */
+      if (preferences.notificationsEnabled && document.hidden) {
+        showNotification(
+          endedPhase === "work" ? "Focus session complete" : "Break over",
+          endedPhase === "work"
+            ? "Time for a break."
+            : "Ready for another focus session?",
+        );
+      }
+
       setState((current) => advancePhase(current, config));
       setJustCompleted(true);
     }
-  }, [state.status, remainingMs, config]);
+  }, [
+    state.status,
+    state.phase,
+    remainingMs,
+    config,
+    preferences.soundEnabled,
+    preferences.notificationsEnabled,
+  ]);
+
+  /**
+   * Wake up exactly when the phase ends.
+   *
+   * The 250ms interval already notices completion — but only when it fires, and
+   * in a hidden tab browsers throttle it to roughly once a minute. That's fine
+   * for the *display* (nobody's looking) and bad for the *alert*, which could
+   * arrive up to a minute late. A chime a minute after your break started is
+   * worse than useless.
+   *
+   * So we also schedule a single timeout for the exact moment of completion.
+   * One-shot timers are throttled far less aggressively than repeating ones.
+   *
+   * Note this doesn't add a second way to complete a phase — it just forces a
+   * re-render at the right instant, and the effect above does the actual work.
+   * Keeping one completion path means the alert can't fire twice or disagree
+   * with the state.
+   *
+   * Honest limitation: a heavily throttled or suspended tab can still delay
+   * this. Browsers don't guarantee timer precision in the background, and no
+   * amount of client-side cleverness changes that.
+   */
+  useEffect(() => {
+    if (state.status !== "running" || state.endsAt === null) return;
+
+    // A small buffer so that when this fires, the computed remaining time is
+    // definitely at or below zero rather than a millisecond above it.
+    const delay = Math.max(0, state.endsAt - Date.now()) + 50;
+
+    const id = setTimeout(() => forceRender((n) => n + 1), delay);
+    return () => clearTimeout(id);
+  }, [state.status, state.endsAt]);
 
   /**
    * Adopt new durations when the settings change — but only while idle.
@@ -227,6 +292,20 @@ export function TimerProvider({ children }: { children: React.ReactNode }) {
   }, [state]);
 
   const start = useCallback(() => {
+    /**
+     * Unlock audio here, and only here.
+     *
+     * This is the whole reason the autoplay policy shapes this feature. Browsers
+     * only allow audio to begin during a user gesture — and the moment we
+     * actually want sound, 25 minutes from now, is not one. Pressing Start is,
+     * so we create and resume the audio context on this click and keep it alive
+     * until the chime is due.
+     *
+     * Calling it on mount instead would look reasonable and silently fail: the
+     * context would be created suspended and never resume.
+     */
+    unlockAudio();
+
     setJustCompleted(false);
     setState((current) => startState(current, Date.now()));
   }, []);

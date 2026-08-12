@@ -110,6 +110,31 @@ Three things fall out of this for free:
 - The logic is pure (`now` is a parameter, not a `Date.now()` call), so it's
   testable without waiting.
 
+### Completion alerts
+
+Both are shaped by browser policies that exist because of past abuse, and both
+come down to *asking at the right moment*.
+
+**Sound** is synthesized with the Web Audio API rather than loaded from a file —
+no asset to download or fail. The constraint is the autoplay policy: audio can
+only begin during a user gesture, and the moment we want sound (25 minutes in)
+is not one. So the audio context is created and resumed when you press **Start**,
+and kept alive until the chime is due. Unlocking it on mount instead would look
+correct and silently never play.
+
+**Notifications** are requested only when you switch the setting on — never on
+page load. A browser shows that prompt once; refuse it and the setting moves
+into browser UI most people never open. Asking during a deliberate click means
+the request is expected and its purpose obvious.
+
+Note that the toggle stores *intent*, while permission is per-browser and lives
+outside our database. Those can disagree — wanted-but-blocked, wanted-but-never-
+asked, unsupported entirely — and the settings UI says which, because a single
+"notifications are off" would be misleading in most of those cases.
+
+Notifications only fire when the tab is hidden. One for something you're already
+looking at is noise.
+
 Phases do **not** auto-start when one ends. Because time is derived, a timer
 left running while you're away is genuinely finished when you return — and
 auto-starting would force us to invent what happened during the gap. Landing
@@ -229,7 +254,7 @@ domain, so that exact line works there unchanged — dev and prod behave alike.
 - [x] **4b. Theme switcher** — DaisyUI themes + `UserPreferences` table
 - [x] **5a. Pomodoro timer** — drift-free engine, survives tab switches and reloads
 - [x] **5b. Timer settings** — custom durations, tab-title countdown
-- [ ] 5c. Completion alerts — sound and browser notifications
+- [x] **5c. Completion alerts** — synthesized chime and desktop notifications
 - [ ] 6. Focus Mode
 - [ ] 7. Notes
 - [ ] 8. Boards

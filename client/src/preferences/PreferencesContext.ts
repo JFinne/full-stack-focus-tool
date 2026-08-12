@@ -28,6 +28,9 @@ export type Preferences = {
   shortBreakMinutes: number;
   longBreakMinutes: number;
   sessionsBeforeLongBreak: number;
+  soundEnabled: boolean;
+  /** Whether the user wants notifications — not whether the browser allows them. */
+  notificationsEnabled: boolean;
 };
 
 /**
@@ -46,6 +49,8 @@ export const DEFAULT_PREFERENCES: Preferences = {
   shortBreakMinutes: 5,
   longBreakMinutes: 15,
   sessionsBeforeLongBreak: 4,
+  soundEnabled: true,
+  notificationsEnabled: false,
 };
 
 /** Status of the last attempt to save. See the note in ThemeContext.ts. */
