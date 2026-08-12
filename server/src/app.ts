@@ -19,7 +19,10 @@
  */
 
 import express from "express";
+import cookieParser from "cookie-parser";
 import { prisma } from "./lib/prisma.js";
+import { attachUser } from "./middleware/auth.js";
+import { authRouter } from "./routes/auth.js";
 
 // `express()` creates the application object. Everything else in this file is
 // either attaching middleware to it or attaching routes to it.
@@ -37,7 +40,18 @@ const app = express();
 // watches for requests that say "my body is JSON", parses that JSON, and hands
 // it to your route handlers as a ready-to-use object on `req.body`.
 // Without this line, `req.body` would be undefined on every POST you write.
-app.use(express.json());
+// A size limit on request bodies. The default is 100kb, but stating it makes
+// the decision visible: without a cap, anyone could try to exhaust the server's
+// memory by posting an enormous JSON document.
+app.use(express.json({ limit: "100kb" }));
+
+// Parses the Cookie header into `req.cookies`. Express doesn't do this on its
+// own, and without it our session cookie would be an unparsed string.
+app.use(cookieParser());
+
+// Identifies the user on every request, if a valid session cookie is present.
+// This must come before the routes below, since they rely on `req.user`.
+app.use(attachUser);
 
 /* ------------------------------------------------------------------ *
  * Routes
@@ -71,6 +85,9 @@ app.get("/api/health", (_req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// Everything in routes/auth.ts, mounted under /api/auth.
+app.use("/api/auth", authRouter);
 
 /**
  * GET /api/health/db

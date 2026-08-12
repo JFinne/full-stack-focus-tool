@@ -102,7 +102,8 @@ domain, so that exact line works there unchanged — dev and prod behave alike.
 
 - [x] **1. Scaffolding** — client, server, and the connection between them
 - [x] **2. Database** — Neon Postgres + Prisma, `users` table, first migration
-- [ ] 3. Auth — register, login, logout, sessions
+- [x] **3a. Auth (server)** — register, login, logout, sessions, `requireAuth`
+- [ ] 3b. Auth (client) — signup/login forms and the signed-in gate
 - [ ] 4. App shell — login gate, dashboard layout, theme switcher
 - [ ] 5. Pomodoro timer
 - [ ] 6. Focus Mode

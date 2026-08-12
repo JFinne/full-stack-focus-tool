@@ -75,5 +75,73 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  /// Every login session this user currently has open.
+  ///
+  /// This line creates no column. It's the Prisma-side view of the relation
+  /// that Session declares below, and it's what lets you write
+  /// `prisma.user.findUnique({ include: { sessions: true } })`.
+  sessions Session[]
+
   @@map("users")
+}
+
+/// One active login. A row here means "this browser is signed in as this user."
+///
+/// Sessions live in the database rather than in the server's memory, and that
+/// is a requirement rather than a preference for us: on Vercel the API runs as
+/// a serverless function that sleeps between requests and forgets everything in
+/// memory. Anything that must outlive a single request has to be written down.
+///
+/// The upside is that logging out actually works everywhere, and you could
+/// build a "sign out all my other devices" feature by deleting rows.
+model Session {
+  /// The SHA-256 hash of the session token — NOT the token itself.
+  ///
+  /// The flow: we generate a long random token, send it to the browser in a
+  /// cookie, and store only its hash here. When a request arrives we hash the
+  /// cookie value and look for a matching row.
+  ///
+  /// Why bother, when the token is random rather than secret-like a password?
+  /// Because it limits the blast radius of a database leak. A stolen `users`
+  /// table gives an attacker unusable password hashes; a stolen `sessions`
+  /// table full of raw tokens would let them log in as anyone, instantly. Hashed
+  /// tokens are useless in the same way hashed passwords are.
+  ///
+  /// Note we use a *fast* hash (SHA-256) here, where passwords need a
+  /// deliberately *slow* one. That's not an inconsistency. Slow hashing exists
+  /// to make guessing infeasible, and matters only because human passwords are
+  /// guessable. A 256-bit random token cannot be guessed at any speed, so the
+  /// only job here is to be irreversible — and fast is a feature, since this
+  /// runs on every single request.
+  id String @id
+
+  /// Which user this session belongs to.
+  userId String
+
+  /// The relation itself.
+  ///
+  /// `onDelete: Cascade` tells Postgres that deleting a user must also delete
+  /// their sessions. Without it the database would refuse to delete a user who
+  /// still has sessions — a foreign key pointing at a row that doesn't exist is
+  /// exactly what foreign keys are there to prevent. Cascade says "clean up the
+  /// dependents automatically," which is right here: a session belonging to a
+  /// deleted account is meaningless.
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// When this session stops being valid.
+  ///
+  /// Checked on every request. Expiry is what bounds the damage if a session
+  /// cookie is ever stolen — without it, one leaked token would work forever.
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+
+  /// An index on userId.
+  ///
+  /// Indexes make lookups by a column fast. We'll query "all sessions for this
+  /// user" when logging out everywhere, and without an index Postgres would
+  /// scan the entire table each time. Primary keys and @unique columns get
+  /// indexes automatically; other columns you search by need to be declared.
+  @@index([userId])
+  @@map("sessions")
 }
