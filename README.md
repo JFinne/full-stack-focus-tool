@@ -47,6 +47,39 @@ npm run build      # production build of both
 npm run typecheck  # type-check without building
 ```
 
+## Database
+
+The schema lives in [server/prisma/schema.prisma](server/prisma/schema.prisma).
+Edit that file, then generate a migration:
+
+```bash
+npx prisma migrate dev --name describe_your_change
+```
+
+That writes a timestamped SQL file into `server/prisma/migrations/` and applies
+it. Those migration files are committed — they're the history of how the
+database got to its current shape, and they're what lets a fresh clone (or the
+production database) reach the same state by replaying them in order.
+
+Useful commands, all run from `server/`:
+
+```bash
+npx prisma studio
+```
+
+Opens a browser table-viewer for your data — handy for confirming that a signup
+actually wrote a row.
+
+```bash
+npx prisma generate
+```
+
+Regenerates the typed client. Required after cloning, since the generated code
+is gitignored rather than committed.
+
+Setup on a new machine: copy `server/.env.example` to `server/.env` and fill in
+`DATABASE_URL` from the [Neon](https://neon.tech) dashboard.
+
 ## Two things worth understanding
 
 **npm workspaces.** The root `package.json` lists `client` and `server` as
@@ -68,7 +101,7 @@ domain, so that exact line works there unchanged — dev and prod behave alike.
 ## Progress
 
 - [x] **1. Scaffolding** — client, server, and the connection between them
-- [ ] 2. Database — Postgres + Prisma, `User` table, first migration
+- [x] **2. Database** — Neon Postgres + Prisma, `users` table, first migration
 - [ ] 3. Auth — register, login, logout, sessions
 - [ ] 4. App shell — login gate, dashboard layout, theme switcher
 - [ ] 5. Pomodoro timer
