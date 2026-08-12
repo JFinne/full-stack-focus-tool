@@ -8,7 +8,7 @@ A full-stack productivity and focus app for managing school workloads.
 | -------- | ------------------------------------- | ------------------------------------------------------------------- |
 | Frontend | React 19 + Vite + Tailwind 4 + DaisyUI | Fast dev server; DaisyUI's themes double as the Theme Settings feature |
 | Backend  | Express 5 + TypeScript                | Kept in its own folder so the client/server boundary stays visible    |
-| Database | PostgreSQL + Prisma *(not yet added)*  | Readable schema, real migrations, typed queries                       |
+| Database | PostgreSQL (Neon) + Prisma 7           | Readable schema, real migrations, typed queries                       |
 | Hosting  | Vercel                                 | Static client + serverless API on one domain                          |
 
 ## Layout

@@ -19,6 +19,7 @@
  */
 
 import express from "express";
+import { prisma } from "./lib/prisma.js";
 
 // `express()` creates the application object. Everything else in this file is
 // either attaching middleware to it or attaching routes to it.
@@ -69,6 +70,49 @@ app.get("/api/health", (_req, res) => {
     // cached one — useful the first time something looks frozen.
     timestamp: new Date().toISOString(),
   });
+});
+
+/**
+ * GET /api/health/db
+ *
+ * The health check's more demanding sibling: it proves the server can actually
+ * reach the database, not merely that the server is awake.
+ *
+ * These are deliberately two separate endpoints. If the app breaks, "server up
+ * but database unreachable" and "server down" are different problems with
+ * different fixes, and you want to be able to tell them apart in one step.
+ */
+app.get("/api/health/db", async (_req, res) => {
+  try {
+    // `$queryRaw` runs literal SQL. `SELECT 1` is the traditional do-nothing
+    // query — it touches no tables and returns a single row, so it tests the
+    // connection and nothing else.
+    //
+    // The backtick-tagged template is Prisma's safe form: any values you
+    // interpolate get sent as separate parameters rather than pasted into the
+    // SQL string, which is what prevents SQL injection. There are no values
+    // here, but it's worth knowing why the syntax looks like this.
+    await prisma.$queryRaw`SELECT 1`;
+
+    // Count the users table. Right now that's 0, which is exactly the point —
+    // a successful count proves the table exists and the migration worked.
+    const userCount = await prisma.user.count();
+
+    res.json({
+      status: "ok",
+      message: "Database connection is healthy.",
+      userCount,
+    });
+  } catch (error) {
+    // 503 Service Unavailable is the honest status here: the server itself is
+    // fine, but a service it depends on is not.
+    console.error("[server] Database health check failed:", error);
+    res.status(503).json({
+      status: "error",
+      message: "Could not reach the database.",
+      detail: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
 });
 
 /**

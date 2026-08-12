@@ -5,6 +5,16 @@
  * built in app.ts and put it on a port so it can receive real network traffic.
  */
 
+// This must come first, before anything that reads process.env.
+//
+// It loads the .env file into process.env. ES module imports run top to bottom,
+// so putting it above the app import guarantees DATABASE_URL is available by
+// the time the database client is created.
+//
+// In production this does nothing useful and that's fine — Vercel injects
+// environment variables directly and there is no .env file to find.
+import "dotenv/config";
+
 // Note the ".js" extension on a file that is really app.ts.
 //
 // This is not a typo. Our tsconfig uses Node's own module resolution, which

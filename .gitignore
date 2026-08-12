@@ -13,6 +13,13 @@ build/
 .env.*
 !.env.example
 
+# Prisma auto-installs ~150 files of AI-agent reference docs on `prisma init`.
+# They're useful locally but they're vendor documentation, not our code, and
+# they'd bury real changes in every diff. Regenerate with `npx prisma init`.
+server/.agents/
+server/.claude/
+server/skills-lock.json
+
 # Editor / OS noise
 .vscode/*
 !.vscode/extensions.json

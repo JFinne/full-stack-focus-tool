@@ -1,0 +1,79 @@
+// This is your Prisma schema file. It is the single source of truth for what
+// your database looks like. You describe your tables here, and Prisma does two
+// things with that description:
+//
+//   1. Generates SQL migrations — versioned files that create or alter the real
+//      tables in Postgres.
+//   2. Generates a typed client — so `prisma.user.findUnique(...)` autocompletes
+//      your actual columns and errors on a typo.
+//
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  // "prisma-client" is the modern generator (Prisma 7). Older tutorials will
+  // say "prisma-client-js" — that's the legacy one.
+  provider = "prisma-client"
+
+  // The generated client is written into our source folder rather than hidden
+  // inside node_modules. It's gitignored, so it never gets committed — after
+  // cloning this repo you run `npx prisma generate` to recreate it.
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  // Note there is no `url` here. In Prisma 7 the connection string lives in
+  // prisma.config.ts, which reads it from the DATABASE_URL environment
+  // variable. Keeping it out of this file means the schema is safe to commit
+  // while the password never is.
+}
+
+/// A person with an account on the focus tool.
+///
+/// Postgres tables are conventionally lowercase and plural, while Prisma models
+/// are singular and capitalised. `@@map` at the bottom bridges the two: you
+/// write `prisma.user` in code, the real table is called `users`.
+model User {
+  /// Primary key — the unique identifier for a row.
+  ///
+  /// We use a random string (cuid) rather than an auto-incrementing number, and
+  /// the reason is specific to this app. Sequential IDs leak information: if
+  /// your account is /users/4, anyone can guess that /users/5 exists, and can
+  /// tell how many users the app has. Since we're going to build shareable
+  /// links for boards and notes, guessable IDs would eventually mean guessable
+  /// documents. Random IDs make that whole category of problem disappear.
+  ///
+  /// cuid() also generates the ID in the application rather than the database,
+  /// which means we know a record's ID before we save it — handy later.
+  id String @id @default(cuid())
+
+  /// Login identifier. `@unique` tells Postgres to enforce that no two rows
+  /// share an email — enforced by the *database*, not just our code. That
+  /// distinction matters: two signup requests arriving at the same instant
+  /// could both pass an "is this email taken?" check in our code, but the
+  /// database will still refuse the second one.
+  ///
+  /// Postgres string comparison is case-sensitive, so "Sam@x.com" and
+  /// "sam@x.com" would count as different accounts. We'll normalise emails to
+  /// lowercase before saving them, in the auth code in the next chunk.
+  email String @unique
+
+  /// The user's password after hashing — never the password itself.
+  ///
+  /// Hashing is one-way: we can check whether a submitted password matches, but
+  /// we can never recover the original. So if this database is ever stolen, the
+  /// passwords in it are not usable. The actual hashing happens in chunk 3;
+  /// the column exists now so we don't need a second migration to add it.
+  passwordHash String
+
+  /// The name shown in the UI and to people they share boards with.
+  displayName String
+
+  /// Bookkeeping timestamps.
+  /// `@default(now())` is set once when the row is created.
+  /// `@updatedAt` is rewritten by Prisma on every update.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
